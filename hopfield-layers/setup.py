@@ -4,12 +4,13 @@ with open(r'README.md', mode=r'r') as readme_handle:
     long_description = readme_handle.read()
 
 setuptools.setup(
-    name=r'hopfield-layers-dahn',
+    name=r'difflayers',
     version=r'0.1.0',
     author=r'Priyam Ghosh',
     author_email=r'',
     url=r'https://github.com/hopfileds/hopfield-layers',
-    description=r'DAHN: Diffusion-Augmented Hopfield Networks (fork of ml-jku/hopfield-layers)',
+    description=r'difflayers: Diffusion-Augmented Hopfield Networks',
+
     long_description=long_description,
     long_description_content_type=r'text/markdown',
     license=r'BSD',

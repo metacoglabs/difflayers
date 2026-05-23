@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "hopfield-layers-dahn"
+name = "difflayers"
 version = "0.1.0"
-description = "DAHN: Diffusion-Augmented Hopfield Networks (fork of ml-jku/hopfield-layers)"
+description = "difflayers: Diffusion-Augmented Hopfield Networks"
 readme = "README.md"
 license = { text = "BSD" }
 authors = [{ name = "Priyam Ghosh" }]
