@@ -314,11 +314,23 @@ class FactoredDiffusion(DiffusionOperator):
         Fallback: reconstruct (W, deg) from an unnormalised Laplacian.
 
         For L = D - A:  deg = diag(D) = diag(L)  and  A = diag(deg) - L.
-        NOTE: this identity holds ONLY for the unnormalised Laplacian.
-        For normalised L, call ``precompute_from_graph`` instead.
+        NOTE: this identity holds ONLY for the unnormalised Laplacian
+        (diagonal values equal the node degrees, typically >> 1).
+        For the normalised Laplacian (diagonal values in [0, 1]),
+        call ``precompute_from_graph(W, deg)`` instead.
         """
         L_dense = L.to_dense() if L.is_sparse else L
-        self._deg = L_dense.diagonal().clone()                # (N,)
+        diag_vals = L_dense.diagonal()
+        if diag_vals.max().item() <= 1.5:
+            raise ValueError(
+                "FactoredDiffusion.precompute(L) was called with a normalised "
+                "Laplacian (max diagonal value {:.4f} <= 1.5). "
+                "The factored identity A = diag(deg) - L only holds for the "
+                "unnormalised Laplacian. "
+                "Use precompute_from_graph(W, deg) instead, or switch to "
+                "SimpleDiffusion / IterativeDiffusion.".format(diag_vals.max().item())
+            )
+        self._deg = diag_vals.clone()                         # (N,)
         self._W = torch.diag(self._deg) - L_dense             # A = D - L
         return True   # sentinel — _op not used as a matrix here
 
