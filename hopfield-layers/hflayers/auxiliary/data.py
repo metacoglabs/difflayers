@@ -152,7 +152,7 @@ class BitPatternSet(Dataset):
 
     @property
     def initial_seed(self) -> int:
-        return self.__seed
+        return self.__seed_signals
 
     @property
     def bags(self) -> torch.Tensor:
