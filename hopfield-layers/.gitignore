@@ -5,6 +5,13 @@ __pycache__/
 dist/
 build/
 *.egg
+*.egg-link
+.eggs/
+pip-wheel-metadata/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
 
 # OS
 .DS_Store
@@ -15,7 +22,19 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+.envrc
 
 # Data & results (generated)
 data/
 results/
+
+# Internal scratch / design documents
+solution.*
+AUDIT_REPORT.md
+GRAPH_DIFFUSION_README.md
+SPEC_ALIGNMENT_AUDIT.md
+
+# Virtual environments
+.venv/
+venv/
+env/
