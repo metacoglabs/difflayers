@@ -198,7 +198,7 @@ def run_modes(args):
 
 def run_logit(args):
     print("\n" + "=" * 60)
-    print("EXPERIMENT 6 — Logit vs Feature Diffusion")
+    print("EXPERIMENT 6 — Weight vs Feature Diffusion")
     print("=" * 60)
     from src.experiments.logit_vs_feature import run_logit_vs_feature
     from src.utils.visualization import plot_noise_multi_mode

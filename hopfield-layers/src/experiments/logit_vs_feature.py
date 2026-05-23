@@ -77,24 +77,25 @@ def _build_diffused(beta: float, eta: float, k: int, mode: str,
 
 
 @torch.no_grad()
-def _retrieval_with_logit_diffusion(
+def _retrieval_with_weight_diffusion(
     baseline_model, patterns, noisy_queries, L, eta, mode, steps
 ):
     """
-    Logit-level diffusion: run baseline attention to get raw logits,
-    then smooth them with graph diffusion before softmax.
+    Attention-weight diffusion: run baseline attention to get post-softmax
+    attention weights, then smooth them with graph diffusion and re-normalise.
+    Note: this is NOT logit-level diffusion (pre-softmax); true logit access
+    would require a hook inside HopfieldCore before the softmax call.
     """
     M, d = noisy_queries.shape
     N = patterns.shape[0]
     stored = patterns.unsqueeze(0).expand(M, N, d)
     query = noisy_queries.unsqueeze(1)
 
-    # Get raw associations (before softmax)
+    # get_association_matrix returns post-softmax attention weights
     attn = baseline_model.get_association_matrix(input=(stored, query, stored))
-    logits = attn[:, 0, 0, :]                        # (M, N) — these are post-softmax
+    logits = attn[:, 0, 0, :]                        # (M, N) — post-softmax weights
 
-    # For logit-level diffusion, we diffuse the softmax outputs as a proxy
-    # (true logit access would need deeper hook into HopfieldCore)
+    # Smooth the post-softmax weights over the key graph
     # Diffuse over the N-dim (key dimension) using L
     # logits shape: (M, N) — treat as (M, N) where we diffuse over N
     logits_t = logits.t()                             # (N, M)
@@ -174,8 +175,8 @@ def run_logit_vs_feature(
         pred_feat = _run_retrieval(feature_model, patterns, noisy_queries)
         acc_feat = accuracy(pred_feat, target_idx)
 
-        # Logit-level diffusion
-        pred_logit = _retrieval_with_logit_diffusion(
+        # Attention-weight diffusion
+        pred_logit = _retrieval_with_weight_diffusion(
             baseline_model, patterns, noisy_queries, L, eta, mode, steps
         )
         acc_logit = accuracy(pred_logit, target_idx)
@@ -195,12 +196,12 @@ def run_logit_vs_feature(
         acc_both = accuracy(pred_both, target_idx)
 
         for config, acc in [("baseline", acc_base), ("feature", acc_feat),
-                            ("logit", acc_logit), ("both", acc_both)]:
+                            ("weight", acc_logit), ("both", acc_both)]:
             rows.append({"noise_level": round(p, 4), "config": config,
                          "accuracy": round(acc, 4)})
 
         print(f"  p={p:.2f}  base={acc_base:.3f}  feat={acc_feat:.3f}"
-              f"  logit={acc_logit:.3f}  both={acc_both:.3f}")
+              f"  weight={acc_logit:.3f}  both={acc_both:.3f}")
 
     df = pd.DataFrame(rows)
     out_dir = Path(results_dir)
