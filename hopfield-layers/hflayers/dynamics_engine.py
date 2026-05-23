@@ -163,7 +163,11 @@ class GraphCache:
             op:          Precomputed DiffusionOperator.
         """
         ptr = patterns.data_ptr()
-        if self._cfg.cache_graph and ptr == self._cached_ptr:
+        # Composite key: (data_ptr, shape, checksum) guards against PyTorch
+        # reusing the same memory address for a different tensor after the
+        # original is freed (BUG-4 fix).
+        cache_key = (ptr, tuple(patterns.shape), float(patterns.sum()))
+        if self._cfg.cache_graph and cache_key == self._cached_ptr:
             return (
                 self._cached_W,
                 self._cached_deg,
@@ -175,7 +179,7 @@ class GraphCache:
         W, deg, adj_idx, L, op = self._build(patterns)
 
         if self._cfg.cache_graph:
-            self._cached_ptr = ptr
+            self._cached_ptr = cache_key
             self._cached_W   = W
             self._cached_deg = deg
             self._cached_adj = adj_idx
@@ -372,8 +376,10 @@ class DynamicsEngine:
         attention_op: Optional[AttentionOperator] = None,
         steps: Optional[int] = None,
         energy_tracker: Optional[EnergyTracker] = None,
+        query_diffusion_op: Optional[DiffusionOperator] = None,
     ) -> None:
         self._diff_op = diffusion_op
+        self._query_diff_op = query_diffusion_op  # separate op for Q; falls back to _diff_op if None
         self._attn_op = attention_op
         self._steps   = steps if steps is not None else diffusion_op.steps
         self._tracker = energy_tracker
@@ -443,7 +449,8 @@ class DynamicsEngine:
             if diffuse_key:
                 K = self._diff_op(K)
             if diffuse_query:
-                Q = self._diff_op(Q)
+                Q = (self._query_diff_op if self._query_diff_op is not None
+                     else self._diff_op)(Q)
 
             # Attention update — dense O(N^2) or graph O(kN)
             Q = self._attn_op(Q, K, V, adj_indices=adj_indices)

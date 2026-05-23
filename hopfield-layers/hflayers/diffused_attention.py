@@ -309,9 +309,15 @@ class DiffusedHopfield(Hopfield):
         # --- Full dynamics loop: interleaved diffusion + attention (§0, §4) ---
         cfg = self._diff_cfg
         _W_k = _deg_k = _adj_k = L_k = op_k = None
+        _W_q = _deg_q = _adj_q = L_q = op_q = None
         if cfg.eta > 0.0 and (cfg.diffuse_key or cfg.diffuse_query):
             key_repr = stored_pattern.detach().mean(dim=1).float()
             _W_k, _deg_k, _adj_k, L_k, op_k = self._key_cache.get(key_repr)
+
+            # Build a query-specific graph so Q is diffused over its own topology.
+            if cfg.diffuse_query:
+                q_repr = state_pattern.detach().mean(dim=1).float()
+                _W_q, _deg_q, _adj_q, L_q, op_q = self._query_cache.get(q_repr)
 
             # Adaptive η: scale by attention entropy before dynamics loop
             eta_eff = cfg.eta
@@ -335,16 +341,32 @@ class DiffusedHopfield(Hopfield):
                         op_k = DiffusionOperator.create(
                             cfg.diffusion_mode, eta_eff, cfg.steps
                         ).precompute(L_k)
+                    # Rebuild query op with same eta_eff
+                    if op_q is not None:
+                        if cfg.diffusion_mode == "factored":
+                            op_q = FactoredDiffusion(
+                                eta=eta_eff, steps=cfg.steps
+                            ).precompute_from_graph(_W_q, _deg_q)
+                        else:
+                            op_q = DiffusionOperator.create(
+                                cfg.diffusion_mode, eta_eff, cfg.steps
+                            ).precompute(L_q)
 
             # Single-step copy for dynamics (outer loop controls iteration count)
             op_dyn = copy.copy(op_k)
             op_dyn.steps = 1
+
+            op_q_dyn = None
+            if op_q is not None:
+                op_q_dyn = copy.copy(op_q)
+                op_q_dyn.steps = 1
 
             engine = DynamicsEngine(
                 diffusion_op=op_dyn,
                 attention_op=self._attn_op,
                 steps=self.diffusion_steps,
                 energy_tracker=self._energy_tracker,
+                query_diffusion_op=op_q_dyn,
             )
             state_pattern, stored_pattern = engine.run_dynamics(
                 Q=state_pattern, K=stored_pattern, V=pattern_projection,
