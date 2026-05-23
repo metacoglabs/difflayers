@@ -353,11 +353,11 @@ class Hopfield(Module):
 
     @property
     def normalize_hopfield_space(self) -> bool:
-        return self.hopfield.normalize_hopfield_space
+        return self.association_core.normalize_pattern
 
     @property
     def normalize_hopfield_space_affine(self) -> bool:
-        return self.hopfield.normalize_hopfield_space_affine
+        return self.association_core.normalize_pattern_affine
 
 
 class HopfieldPooling(Module):
@@ -626,6 +626,14 @@ class HopfieldPooling(Module):
     @property
     def normalize_pattern_projection_affine(self) -> bool:
         return self.hopfield.normalize_pattern_projection_affine
+
+    @property
+    def normalize_hopfield_space(self) -> bool:
+        return self.hopfield.normalize_hopfield_space
+
+    @property
+    def normalize_hopfield_space_affine(self) -> bool:
+        return self.hopfield.normalize_hopfield_space_affine
 
 
 class HopfieldLayer(Module):
