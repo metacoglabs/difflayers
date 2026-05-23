@@ -24,12 +24,12 @@ import torch
 import numpy as np
 import pandas as pd
 
-from hflayers import Hopfield, DiffusedHopfield
+from difflayers import Hopfield, DiffusedHopfield
 from src.utils.data_gen import generate_patterns, generate_clustered_patterns, add_noise
 from src.utils.metrics import accuracy
-from hflayers.diffusion import apply_diffusion
-from hflayers.graph.build_graph import build_similarity_matrix, build_knn_graph
-from hflayers.graph.laplacian import compute_normalized_laplacian
+from difflayers.diffusion import apply_diffusion
+from difflayers.graph.build_graph import build_similarity_matrix, build_knn_graph
+from difflayers.graph.laplacian import compute_normalized_laplacian
 
 
 def _build_baseline(beta: float, device: torch.device):

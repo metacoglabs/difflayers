@@ -37,3 +37,6 @@ Repository = "https://github.com/hopfileds/hopfield-layers"
 
 [tool.setuptools.packages.find]
 exclude = ["examples*", "notebooks*", "data*", "results*", "src*", "bench*"]
+
+[tool.setuptools.package-dir]
+difflayers = "difflayers"

@@ -29,7 +29,7 @@ import torch
 import numpy as np
 import pandas as pd
 
-from hflayers import Hopfield, DiffusedHopfield
+from difflayers import Hopfield, DiffusedHopfield
 from src.utils.data_gen import generate_patterns, generate_clustered_patterns, add_noise
 from src.utils.metrics import accuracy
 

@@ -29,10 +29,10 @@ import numpy as np
 import pandas as pd
 import torch
 
-from hflayers.diffusion import DiffusionOperator, apply_diffusion
-from hflayers.dynamics_engine import DiffusionConfig, DynamicsEngine, GraphCache
-from hflayers.graph.build_graph import build_similarity_matrix, build_knn_graph
-from hflayers.graph.laplacian import compute_normalized_laplacian
+from difflayers.diffusion import DiffusionOperator, apply_diffusion
+from difflayers.dynamics_engine import DiffusionConfig, DynamicsEngine, GraphCache
+from difflayers.graph.build_graph import build_similarity_matrix, build_knn_graph
+from difflayers.graph.laplacian import compute_normalized_laplacian
 from src.utils.data_gen import generate_clustered_patterns
 
 

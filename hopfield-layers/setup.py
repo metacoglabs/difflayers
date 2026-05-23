@@ -16,6 +16,7 @@ setuptools.setup(
     license=r'BSD',
     packages=setuptools.find_packages(exclude=['examples*', 'notebooks*', 'data*',
                                                'results*', 'src*', 'bench*']),
+    package_dir={'difflayers': 'difflayers'},
     python_requires=r'>=3.8',
     install_requires=[
         r'torch>=1.9.0',
