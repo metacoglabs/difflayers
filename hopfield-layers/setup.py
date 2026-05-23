@@ -7,7 +7,7 @@ setuptools.setup(
     name=r'difflayers',
     version=r'0.1.0',
     author=r'Priyam Ghosh',
-    author_email=r'',
+    author_email=r'priyamghosh9753@gmail.com',
     url=r'https://github.com/hopfileds/hopfield-layers',
     description=r'difflayers: Diffusion-Augmented Hopfield Networks',
 

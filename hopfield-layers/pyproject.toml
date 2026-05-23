@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "difflayers: Diffusion-Augmented Hopfield Networks"
 readme = "README.md"
 license = { text = "BSD" }
-authors = [{ name = "Priyam Ghosh" }]
+authors = [{ name = "Priyam Ghosh", email = "priyamghosh9753@gmail.com" }]
 requires-python = ">=3.8"
 keywords = ["hopfield networks", "deep learning", "attention", "diffusion", "graph"]
 classifiers = [
