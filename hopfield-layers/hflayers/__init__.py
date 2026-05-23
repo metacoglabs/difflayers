@@ -937,3 +937,29 @@ from .dynamics_engine import (  # noqa: E402
     DynamicsEngine,
 )
 from .graph import GraphBuilder, LaplacianBuilder  # noqa: E402
+
+__all__ = [
+    # Original Hopfield modules
+    "Hopfield",
+    "HopfieldPooling",
+    "HopfieldLayer",
+    "HopfieldCore",
+    # DAHN — main model
+    "DiffusedHopfield",
+    # DAHN — diffusion operators
+    "DiffusionOperator",
+    "SimpleDiffusion",
+    "IterativeDiffusion",
+    "SpectralDiffusion",
+    "FactoredDiffusion",
+    "apply_diffusion",
+    # DAHN — graph utilities
+    "GraphBuilder",
+    "LaplacianBuilder",
+    # DAHN — runtime components
+    "DiffusionConfig",
+    "GraphCache",
+    "EnergyTracker",
+    "DynamicsEngine",
+    "AttentionOperator",
+]

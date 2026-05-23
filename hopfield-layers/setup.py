@@ -12,11 +12,28 @@ setuptools.setup(
     description=r'DAHN: Diffusion-Augmented Hopfield Networks (fork of ml-jku/hopfield-layers)',
     long_description=long_description,
     long_description_content_type=r'text/markdown',
-    packages=setuptools.find_packages(),
-    python_requires=r'>=3.8.0',
+    license=r'BSD',
+    packages=setuptools.find_packages(exclude=['examples*', 'notebooks*', 'data*',
+                                               'results*', 'src*', 'bench*']),
+    python_requires=r'>=3.8',
     install_requires=[
-        r'torch>=1.5.0',
-        r'numpy>=1.20.0'
+        r'torch>=1.9.0',
+        r'numpy>=1.20.0',
+        r'scipy>=1.7.0',
     ],
-    zip_safe=True
+    classifiers=[
+        r'Development Status :: 3 - Alpha',
+        r'Intended Audience :: Science/Research',
+        r'License :: OSI Approved :: BSD License',
+        r'Programming Language :: Python :: 3',
+        r'Programming Language :: Python :: 3.8',
+        r'Programming Language :: Python :: 3.9',
+        r'Programming Language :: Python :: 3.10',
+        r'Programming Language :: Python :: 3.11',
+        r'Programming Language :: Python :: 3.12',
+        r'Topic :: Scientific/Engineering :: Artificial Intelligence',
+        r'Operating System :: OS Independent',
+    ],
+    keywords=r'hopfield networks deep learning attention diffusion graph',
+    zip_safe=False,
 )

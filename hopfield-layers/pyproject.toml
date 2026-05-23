@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hopfield-layers-dahn"
+version = "0.1.0"
+description = "DAHN: Diffusion-Augmented Hopfield Networks (fork of ml-jku/hopfield-layers)"
+readme = "README.md"
+license = { text = "BSD" }
+authors = [{ name = "Priyam Ghosh" }]
+requires-python = ">=3.8"
+keywords = ["hopfield networks", "deep learning", "attention", "diffusion", "graph"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: BSD License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "torch>=1.9.0",
+    "numpy>=1.20.0",
+    "scipy>=1.7.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/hopfileds/hopfield-layers"
+Repository = "https://github.com/hopfileds/hopfield-layers"
+"Bug Tracker" = "https://github.com/hopfileds/hopfield-layers/issues"
+
+[tool.setuptools.packages.find]
+exclude = ["examples*", "notebooks*", "data*", "results*", "src*", "bench*"]
