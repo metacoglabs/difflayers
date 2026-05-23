@@ -180,6 +180,9 @@ def hopfield_core_forward(query,                           # type: Tensor
     update_active_heads = torch.tensor([[[True]]] * num_heads * bsz, device=query.device)
     assert update_active_heads.any(), "at least one head needs to be active."
 
+
+
+
     ####################################################################################################################
     #                                         BEGIN HOPFIELD UPDATE ITERATION                                          #
     ####################################################################################################################
@@ -430,6 +433,9 @@ def hopfield_core_forward(query,                           # type: Tensor
             update_active_heads = update_active_heads.unsqueeze(dim=1).unsqueeze(dim=2).repeat(repeats=(bsz, 1, 1))
             xi_old = xi_active
         update_step += 1
+
+
+       
 
     ####################################################################################################################
     #                                          END HOPFIELD UPDATE ITERATION                                           #
