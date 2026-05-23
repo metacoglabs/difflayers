@@ -70,25 +70,51 @@ class GraphBuilder:
         Complexity: O(N²d) + O(N²) + O(kN).
         """
         S = build_similarity_matrix(X)                          # O(N²d)
-        W_dense = build_knn_graph(S, k=self.k, as_sparse=False) # always dense for indices
+        N = S.shape[0]
+        k_actual = min(self.k, N - 1)
 
-        # Degree: row-sum of dense adjacency
-        deg = W_dense.sum(dim=1)                                 # (N,)
-
-        # Neighbor index table: top-k by row (symmetric W, so any nonzero works).
-        # Use topk on dense W for exact kNN indices.
-        k_actual = min(self.k, W_dense.shape[0] - 1)
-        adj_indices = torch.topk(W_dense, k=k_actual, dim=1).indices  # (N, k)
-
-        # Optionally convert W to sparse AFTER extracting dense indices
         if self.use_sparse:
-            nz = W_dense.nonzero(as_tuple=False).t().contiguous()
-            vals = W_dense[nz[0], nz[1]]
+            # BUG-7 fix: build sparse W directly from topk of S, avoiding
+            # the O(N²) full N×N W_dense intermediate that the dense path
+            # would otherwise materialise before conversion to sparse.
+            topk_vals, topk_idx = torch.topk(S, k=k_actual, dim=-1)  # (N, k)
+
+            # adj_indices: kNN neighbor table from pre-symmetrisation topk.
+            adj_indices = topk_idx                                     # (N, k)
+
+            # Symmetrize: include both directed halves of each edge.
+            row_idx = (
+                torch.arange(N, device=X.device)
+                .unsqueeze(1)
+                .expand(-1, k_actual)
+                .reshape(-1)
+            )                                                          # (N*k,)
+            col_idx = topk_idx.reshape(-1)                            # (N*k,)
+            vals    = topk_vals.reshape(-1)                           # (N*k,)
+
+            all_rows = torch.cat([row_idx, col_idx])                  # (2*N*k,)
+            all_cols = torch.cat([col_idx, row_idx])                  # (2*N*k,)
+            all_vals = torch.cat([vals,    vals])                     # (2*N*k,)
+
+            # Coalesce sums duplicate (i,j) entries; the resulting W is
+            # symmetric and non-negative — sufficient for diffusion/Laplacian.
             W: Tensor = torch.sparse_coo_tensor(
-                nz, vals, W_dense.shape,
-                dtype=W_dense.dtype, device=W_dense.device,
+                torch.stack([all_rows, all_cols]),
+                all_vals,
+                (N, N),
+                dtype=S.dtype,
+                device=S.device,
             ).coalesce()
+
+            # Degree from sparse row sums — O(kN), no N×N buffer.
+            deg = torch.zeros(N, dtype=S.dtype, device=S.device)
+            deg.scatter_add_(0, all_rows, all_vals)                   # (N,)
         else:
+            W_dense = build_knn_graph(S, k=k_actual, as_sparse=False)
+            deg = W_dense.sum(dim=1)                                  # (N,)
+            adj_indices = torch.topk(
+                W_dense, k=k_actual, dim=1
+            ).indices                                                  # (N, k)
             W = W_dense
 
         return W, deg, adj_indices
