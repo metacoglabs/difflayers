@@ -1,9 +1,9 @@
 # difflayers — Diffusion-Augmented Hopfield Networks
 
 <p align="center">
-  <a href="https://pypi.org/project/difflayers/"><img src="https://img.shields.io/pypi/v/difflayers?color=blue&label=PyPI" alt="PyPI"></a>
-  <a href="https://pypi.org/project/difflayers/"><img src="https://img.shields.io/pypi/dm/difflayers?color=blue&label=downloads" alt="Downloads"></a>
-  <a href="https://pypi.org/project/difflayers/"><img src="https://img.shields.io/pypi/pyversions/difflayers" alt="Python Versions"></a>
+  <a href="https://pypi.org/project/difflayers/"><img src="https://img.shields.io/pypi/v/difflayers?color=blue&label=PyPI&cacheSeconds=0" alt="PyPI"></a>
+  <a href="https://pypi.org/project/difflayers/"><img src="https://img.shields.io/pypi/dm/difflayers?color=blue&label=downloads&cacheSeconds=0" alt="Downloads"></a>
+  <a href="https://pypi.org/project/difflayers/"><img src="https://img.shields.io/pypi/pyversions/difflayers?cacheSeconds=0" alt="Python Versions"></a>
   <a href="https://pytorch.org"><img src="https://img.shields.io/badge/PyTorch-%E2%89%A51.9-orange" alt="PyTorch"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-BSD-green" alt="License"></a>
   <img src="https://img.shields.io/badge/version-0.1.1-brightgreen" alt="Version 0.1.1">
