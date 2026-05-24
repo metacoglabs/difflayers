@@ -5,7 +5,7 @@ with open(r'README.md', mode=r'r') as readme_handle:
 
 setuptools.setup(
     name=r'difflayers',
-    version=r'0.1.1',
+    version=r'0.1.2',
     author=r'Priyam Ghosh',
     author_email=r'priyamghosh9753@gmail.com',
     url=r'https://github.com/hopfileds/hopfield-layers',
