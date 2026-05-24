@@ -2,9 +2,11 @@
 
 <p align="center">
   <a href="https://pypi.org/project/difflayers/"><img src="https://img.shields.io/pypi/v/difflayers?color=blue&label=PyPI" alt="PyPI"></a>
+  <a href="https://pypi.org/project/difflayers/"><img src="https://img.shields.io/pypi/dm/difflayers?color=blue&label=downloads" alt="Downloads"></a>
   <a href="https://pypi.org/project/difflayers/"><img src="https://img.shields.io/pypi/pyversions/difflayers" alt="Python Versions"></a>
   <a href="https://pytorch.org"><img src="https://img.shields.io/badge/PyTorch-%E2%89%A51.9-orange" alt="PyTorch"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-BSD-green" alt="License"></a>
+  <img src="https://img.shields.io/badge/version-0.1.1-brightgreen" alt="Version 0.1.1">
 </p>
 
 **difflayers** is a PyTorch library that extends modern continuous Hopfield networks with graph-based Laplacian diffusion, turning associative memory layers into structure-aware retrievers. At its core sits the **Diffusion-Augmented Hopfield Network (DAHN)** — a drop-in upgrade to standard Hopfield attention that pre-smooths patterns over a learned kNN graph before every association step, suppressing spurious retrievals and sharpening metastable energy minima.
@@ -35,8 +37,9 @@ The library ships the full original Hopfield layer suite (`Hopfield`, `HopfieldP
 14. [API Reference](#api-reference)
 15. [Complexity Guide](#complexity-guide)
 16. [Background Paper](#background-paper)
-17. [Disclaimer](#disclaimer)
-18. [License](#license)
+17. [Releases](#releases)
+18. [Disclaimer](#disclaimer)
+19. [License](#license)
 
 ---
 
@@ -121,7 +124,8 @@ difflayers/
 ### From PyPI (recommended)
 
 ```bash
-pip install difflayers
+pip install difflayers          # latest (0.1.1)
+pip install difflayers==0.1.1   # pin to a specific version
 ```
 
 ### From source
@@ -710,6 +714,26 @@ The Hopfield attention foundation is described in:
 
 A detailed companion blog post covering the theoretical background is available at
 [ml-jku.github.io/hopfield-layers](https://ml-jku.github.io/hopfield-layers/).
+
+---
+
+## Releases
+
+### [0.1.1](https://pypi.org/project/difflayers/0.1.1/) — 2026-05-25
+
+- Fixed PyPI package description: rebuilt distributions after README rewrite so the correct documentation is shown on the package index page.
+- Version bump only; no API changes.
+
+### [0.1.0](https://pypi.org/project/difflayers/0.1.0/) — 2026-05-25
+
+- Initial public release of `difflayers` on PyPI.
+- Full `Hopfield`, `HopfieldPooling`, `HopfieldLayer` suite ported from the original `hflayers` package and renamed.
+- DAHN (`DiffusedHopfield`) with four diffusion modes: `factored`, `simple`, `iterative`, `spectral`.
+- Graph pipeline: `build_similarity_matrix`, `build_knn_graph`, `compute_laplacian`, `compute_normalized_laplacian`, `GraphBuilder`.
+- `DynamicsEngine`, `EnergyTracker`, `GraphCache`, `DiffusionConfig`.
+- `HopfieldEncoderLayer` and `HopfieldDecoderLayer` transformer drop-ins.
+- Three example notebooks (bit pattern, latch sequence, MNIST bags).
+- Seven experiment runners in `src/experiments/`.
 
 ---
 
