@@ -38,3 +38,13 @@ SPEC_ALIGNMENT_AUDIT.md
 .venv/
 venv/
 env/
+
+# NoteWeave AI workspace (PDFs, chat history, session data)
+.noteweave/
+
+# Python cache dirs (belt-and-suspenders)
+**/__pycache__/
+**/*.pyc
+
+# macOS
+**/.DS_Store
