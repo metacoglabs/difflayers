@@ -247,7 +247,7 @@ Suitable for permutation-invariant sequence summarisation: MIL classification, s
 
 ### HopfieldLayer
 
-A trainable, input-independent lookup table. Stored patterns and their projections are learned parameters; the layer retrieves the energy-aligned stored vector for each input query — functioning as a content-addressable memory with learned slots.
+A trainable, input-independent lookup table. Stored patterns and their projections are learned parameters; the layer retrieves the energy aligned stored vector for each input query — functioning as a content-addressable memory with learned slots. Check the code below
 
 ```python
 from difflayers import HopfieldLayer
