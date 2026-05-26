@@ -117,13 +117,23 @@ def test_iterative_oversmoothing_guard_convergence():
 
 
 def test_iterative_signal_energy_guard():
-    """Signal energy collapse guard fires when energy drops below 10% (P2-A)."""
-    N, d = 8, 4
-    L = _make_laplacian(N)
-    # Very large eta drives eigenvalues negative → signal collapses
-    op = IterativeDiffusion(eta=2.0, steps=30, early_stop_tol=0.0)
-    op.precompute(L)
-    X = torch.ones(N, d)  # uniform signal — easiest to collapse
+    """Signal energy collapse guard fires when energy drops below 10% (P2-A).
+
+    Setup: complete-graph Laplacian K_N with eta=1/N annihilates all non-DC
+    components in a single step.  Centering X removes the DC component so
+    ||D·X|| → 0 after step 1, triggering signal_energy < 0.1.
+    """
+    N, d = 10, 4
+    # Complete-graph Laplacian: L = N·I - J (eigenvalues: 0 for DC, N for rest)
+    J = torch.ones(N, N)
+    L_complete = N * torch.eye(N) - J
+    # eta = 1/N  ⟹  D·non_DC_component = (1 - eta*N)·x = 0
+    op = IterativeDiffusion(eta=1.0 / N, steps=5, early_stop_tol=0.0)
+    op.precompute(L_complete)
+    # Center X so DC component (mean) is zero → D·X = 0 in one step
+    torch.manual_seed(0)
+    X = torch.randn(N, d)
+    X = X - X.mean(dim=0, keepdim=True)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         result = op(X)
@@ -134,7 +144,7 @@ def test_iterative_signal_energy_guard():
     assert len(energy_warnings) >= 1, (
         "IterativeDiffusion: expected a signal-energy collapse warning"
     )
-    # Result should not be all-zeros (guard returned last good state)
+    # Guard must return the last good state (X before collapse), not zeros
     assert result.abs().max().item() > 1e-6, (
         "Signal energy guard should return last good state, not zeros"
     )

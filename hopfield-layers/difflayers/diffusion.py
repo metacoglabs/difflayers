@@ -217,7 +217,7 @@ class IterativeDiffusion(DiffusionOperator):
 
     def __call__(self, X: Tensor) -> Tensor:
         self._check_ready()
-        if self.eta == 0.0 or self.steps == 0:
+        if self.steps == 0:
             return X
         X_init_norm = torch.norm(X).item() + 1e-8
         for s in range(self.steps):
