@@ -58,10 +58,13 @@ class AttentionOperator:
         graph : O(kN)
     """
 
+    _VALID_MODES = ("dense", "graph", "graph_force", "auto")
+
     def __init__(self, beta: float = 1.0, mode: str = "dense") -> None:
-        if mode not in ("dense", "graph"):
+        if mode not in self._VALID_MODES:
             raise ValueError(
-                f"AttentionOperator: mode must be 'dense' or 'graph', got '{mode}'."
+                f"AttentionOperator: mode must be one of {self._VALID_MODES}, "
+                f"got '{mode}'."
             )
         self.beta = beta
         self.mode = mode
@@ -74,7 +77,7 @@ class AttentionOperator:
         adj_indices: Optional[Tensor] = None,
     ) -> Tensor:
         """
-        Apply attention.
+        Apply attention using the instance default mode.
 
         Args:
             Q:           (N, d) query patterns.
@@ -86,9 +89,43 @@ class AttentionOperator:
         Returns:
             output: (N, d) attended result.
         """
-        if self.mode == "dense":
+        return self.attend(Q, K, V, adj_indices=adj_indices, mode=self.mode)
+
+    def attend(
+        self,
+        Q: Tensor,
+        K: Tensor,
+        V: Tensor,
+        adj_indices: Optional[Tensor] = None,
+        mode: Optional[str] = None,
+    ) -> Tensor:
+        """
+        Apply attention with an explicit mode override (P1-C).
+
+        Accepts 'dense', 'graph', 'graph_force', and 'auto'.
+        'graph_force' bypasses the N<512 fallback guard in DynamicsEngine.
+        'auto' delegates to the instance default self.mode.
+
+        Args:
+            Q:           (N, d) query patterns.
+            K:           (N, d) key patterns.
+            V:           (N, d) value patterns.
+            adj_indices: (N, k) LongTensor of neighbor indices.
+                         Required for graph/graph_force mode.
+            mode:        Explicit mode override; None uses self.mode.
+
+        Returns:
+            output: (N, d) attended result.
+        """
+        effective = mode if mode is not None else self.mode
+        if effective in ("dense", "auto"):
             return self._dense(Q, K, V)
-        return self._graph(Q, K, V, adj_indices)
+        if effective in ("graph", "graph_force"):
+            return self._graph(Q, K, V, adj_indices)
+        raise ValueError(
+            f"AttentionOperator.attend: unknown mode '{effective}'. "
+            f"Choose from {self._VALID_MODES}."
+        )
 
     # ------------------------------------------------------------------
     # Dense  O(N²d)

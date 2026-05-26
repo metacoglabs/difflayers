@@ -1,0 +1,16 @@
+{
+  "title": "Modern Hopfield Networks meet Encoded Neural Representations --   Addressing Practical Considerations",
+  "slug": "modern_hopfield_networks_meet_encoded_neural_representations_--_addressing_practical_considerations",
+  "arxiv_id": "2409.16408",
+  "authors": [
+    "Satyananda Kashyap",
+    "Niharika S. D'Souza",
+    "Luyao Shi",
+    "Ken C. L. Wong",
+    "Hongzhi Wang",
+    "Tanveer Syeda-Mahmood"
+  ],
+  "year": 2024,
+  "abstract": "Content-addressable memories such as Modern Hopfield Networks (MHN) have been studied as mathematical models of auto-association and storage/retrieval in the human declarative memory, yet their practical use for large-scale content storage faces challenges. Chief among them is the occurrence of meta-stable states, particularly when handling large amounts of high dimensional content. This paper introduces Hopfield Encoding Networks (HEN), a framework that integrates encoded neural representations into MHNs to improve pattern separability and reduce meta-stable states. We show that HEN can also be used for retrieval in the context of hetero association of images with natural language queries, thus removing the limitation of requiring access to partial content in the same domain. Experimental results demonstrate substantial reduction in meta-stable states and increased storage capacity while still enabling perfect recall of a significantly larger number of inputs advancing the practical utility of associative memory networks for real-world tasks.",
+  "pdf_downloaded": true
+}

@@ -1,0 +1,14 @@
+{
+  "title": "Uniform Memory Retrieval with Larger Capacity for Modern Hopfield Models",
+  "slug": "uniform_memory_retrieval_with_larger_capacity_for_modern_hopfield_models",
+  "arxiv_id": "2404.03827",
+  "authors": [
+    "Dennis Wu",
+    "Jerry Yao-Chieh Hu",
+    "Teng-Yun Hsiao",
+    "Han Liu"
+  ],
+  "year": 2024,
+  "abstract": "We propose a two-stage memory retrieval dynamics for modern Hopfield models, termed $\\mathtt{U\\text{-}Hop}$, with enhanced memory capacity. Our key contribution is a learnable feature map $\u00ce\u00a6$ which transforms the Hopfield energy function into kernel space. This transformation ensures convergence between the local minima of energy and the fixed points of retrieval dynamics within the kernel space. Consequently, the kernel norm induced by $\u00ce\u00a6$ serves as a novel similarity measure. It utilizes the stored memory patterns as learning data to enhance memory capacity across all modern Hopfield models. Specifically, we accomplish this by constructing a separation loss $\\mathcal{L}_\u00ce\u00a6$ that separates the local minima of kernelized energy by separating stored memory patterns in kernel space. Methodologically, $\\mathtt{U\\text{-}Hop}$ memory retrieval process consists of: (Stage I) minimizing separation loss for a more uniform memory (local minimum) distribution, followed by (Stage II) standard Hopfield energy minimization for memory retrieval. This results in a significant reduction of possible metastable states in the Hopfield energy function, thus enhancing memory capacity by preventing memory confusion. Empirically, with real-world datasets, we demonstrate that $\\mathtt{U\\text{-}Hop}$ outperforms all existing modern Hopfield models and state-of-the-art similarity measures, achieving substantial improvements in both associative memory retrieval and deep learning tasks. Code is available at https://github.com/MAGICS-LAB/UHop ; future updates are on arXiv:2404.03827",
+  "pdf_downloaded": true
+}

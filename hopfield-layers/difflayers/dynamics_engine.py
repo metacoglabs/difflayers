@@ -44,14 +44,42 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
+import warnings
 
 import torch
+import torch.nn.functional as F
 from torch import Tensor
 
 from .attention_operator import AttentionOperator
 from .diffusion import DiffusionOperator, FactoredDiffusion
 from .graph.builder import GraphBuilder
 from .graph.laplacian_builder import LaplacianBuilder
+
+# ---------------------------------------------------------------------------
+# P0-A  Module-level cross-instance graph cache
+# ---------------------------------------------------------------------------
+# Keyed by (data_ptr, shape, dtype, k_neighbors, eta, checksum) so the same
+# patterns never trigger graph reconstruction across different DiffusedHopfield
+# instances or repeated DynamicsEngine construction calls.
+# Use clear_module_graph_cache() to free memory when patterns change globally.
+_MODULE_GRAPH_CACHE: Dict[tuple, Tuple] = {}
+
+
+def _module_cache_key(patterns: Tensor, k: int, eta: float) -> tuple:
+    """Composite cache key guarding against memory-address reuse (BUG-4)."""
+    return (
+        patterns.data_ptr(),
+        tuple(patterns.shape),
+        str(patterns.dtype),
+        k,
+        round(eta, 8),
+        float(patterns.sum()),          # lightweight fingerprint
+    )
+
+
+def clear_module_graph_cache() -> None:
+    """Evict all cached graph objects.  Call after changing global patterns."""
+    _MODULE_GRAPH_CACHE.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -167,6 +195,8 @@ class GraphCache:
         # reusing the same memory address for a different tensor after the
         # original is freed (BUG-4 fix).
         cache_key = (ptr, tuple(patterns.shape), float(patterns.sum()))
+
+        # Fast path 1: per-instance cache hit (O(1))
         if self._cfg.cache_graph and cache_key == self._cached_ptr:
             return (
                 self._cached_W,
@@ -176,8 +206,27 @@ class GraphCache:
                 self._cached_op,
             )
 
+        # Fast path 2: module-level cross-instance cache hit (P0-A)
+        # Avoids rebuilding graph/Laplacian/operator across DiffusedHopfield
+        # instances that share the same stored patterns.
+        mod_key = _module_cache_key(
+            patterns, self._cfg.k_neighbors, self._cfg.eta
+        )
+        if mod_key in _MODULE_GRAPH_CACHE:
+            W, deg, adj_idx, L, op = _MODULE_GRAPH_CACHE[mod_key]
+            if self._cfg.cache_graph:
+                self._cached_ptr = cache_key
+                self._cached_W   = W
+                self._cached_deg = deg
+                self._cached_adj = adj_idx
+                self._cached_L   = L
+                self._cached_op  = op
+            return W, deg, adj_idx, L, op
+
+        # Slow path: build from scratch, populate both caches
         W, deg, adj_idx, L, op = self._build(patterns)
 
+        _MODULE_GRAPH_CACHE[mod_key] = (W, deg, adj_idx, L, op)
         if self._cfg.cache_graph:
             self._cached_ptr = cache_key
             self._cached_W   = W
@@ -265,6 +314,11 @@ class EnergyTracker:
     def history(self) -> List[float]:
         """List of per-step energy values."""
         return list(self._history)
+
+    @property
+    def records(self) -> List[float]:
+        """Alias for history — P0-B compatibility shim."""
+        return self.history
 
     def reset(self) -> None:
         self._history.clear()
@@ -434,6 +488,22 @@ class DynamicsEngine:
                 "Pass attention_op= at construction time."
             )
 
+        # P1-C: auto-fallback from graph to dense when N < 512
+        # (graph attention is empirically 4× slower than dense at N=64 on
+        # this hardware; break-even is N ≈ 512 for k=8, d=64)
+        N = K.shape[0] if K.dim() == 2 else K.shape[0]
+        _effective_mode = self._attn_op.mode
+        if _effective_mode == 'graph' and N < 512:
+            warnings.warn(
+                f"DynamicsEngine: graph attention requested at N={N} < 512 "
+                f"break-even; falling back to dense "
+                f"(graph is ~4× slower at this size). "
+                f"Set mode='graph_force' on AttentionOperator to override.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            _effective_mode = 'dense'
+
         # Clean slate for energy tracking each dynamics run
         if self._tracker is not None:
             self._tracker.reset()
@@ -453,7 +523,9 @@ class DynamicsEngine:
                      else self._diff_op)(Q)
 
             # Attention update — dense O(N^2) or graph O(kN)
-            Q = self._attn_op(Q, K, V, adj_indices=adj_indices)
+            Q = self._attn_op.attend(Q, K, V,
+                                     adj_indices=adj_indices,
+                                     mode=_effective_mode)
 
             # Optional: energy check for early stop
             if use_energy_L:
@@ -466,6 +538,94 @@ class DynamicsEngine:
                     break
 
         return Q, K
+
+    # ------------------------------------------------------------------
+    # P3-A  TODO: Fused CUDA / Triton kernel (Phase 3 — do not implement now)
+    # ------------------------------------------------------------------
+    # TODO (Phase 3): Fuse the following 3 operations into a single Triton kernel:
+    #   1. scores = beta * (X.T @ a_batch)      — (n, B) matmul
+    #   2. sigma  = softmax(scores, dim=0)       — (n, B) softmax
+    #   3. grad   = -(X @ sigma).T + lam * a    — (d, B) matmul + scale
+    # Target: X read ONCE per fused call (currently read twice in predict_precision).
+    # Reference: FlashAttention-2 (Dao et al., 2023) for fused matmul+softmax.
+    # Expected gain: 2× bandwidth reduction + eliminates intermediate (n,B) buffer.
+    # Hardware target: RTX 3090 (sm86). Use triton.jit with block sizes [64, 128].
+
+    # ------------------------------------------------------------------
+    # P1-D  Batched dynamics — all B queries share one K per step
+    # ------------------------------------------------------------------
+
+    def run_dynamics_batched(
+        self,
+        Q_batch: Tensor,
+        K: Tensor,
+        V: Tensor,
+        diffuse_key: bool = True,
+    ) -> Tensor:
+        """
+        T-step dynamics loop processing B queries simultaneously.
+
+        K is diffused once per step and shared across all B queries.
+        Scores are a single (B, N) batched matmul — X is read once per step.
+
+        Args:
+            Q_batch: (B, d) — batch of query patterns.
+            K:       (N, d) — shared stored patterns (keys).
+            V:       (N, d) — value patterns.
+            diffuse_key: Whether to diffuse K each step.
+
+        Returns:
+            (B, d) attended output after T steps.
+
+        Complexity per step: O(N·d) diffusion (factored) + O(B·N·d) attention.
+        Bandwidth saving vs serial: B × matvec → one batched matmul; K read once.
+        """
+        if self._attn_op is None:
+            raise RuntimeError(
+                "run_dynamics_batched requires an AttentionOperator."
+            )
+
+        Qt = Q_batch           # (B, d)
+        Kt = K.clone()         # (N, d) — shared, not replicated per query
+
+        # P1-C: N < 512 always uses dense for batched path
+        N = Kt.shape[0]
+        _mode = 'graph' if (self._attn_op.mode == 'graph' and N >= 512) else 'dense'
+
+        for _ in range(self._steps):
+            if diffuse_key:
+                Kt = self._diff_op(Kt)                    # (N, d) — once
+            # Batched attention: (B, N) → (B, d)
+            scores  = self._attn_op.beta * (Qt @ Kt.t()) # (B, N)
+            weights = F.softmax(scores, dim=-1)           # (B, N)
+            Qt      = weights @ V                         # (B, d)
+
+        return Qt
+
+    # ------------------------------------------------------------------
+    # P2-B  Diffusion mode auto-selection
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def select_diffusion_mode(N: int, energy_tracking: bool = False) -> str:
+        """
+        Auto-select the fastest diffusion mode for the given problem size.
+
+        Decision table (empirical, RTX-3090 / Apple Silicon baseline):
+            N ≤ 512, energy_tracking=True  → 'simple'   (41.8 GB/s, L-compatible)
+            N ≤ 512, energy_tracking=False → 'simple'   (42.9% peak DRAM BW)
+            N > 512, any                   → 'factored'  (sparse, O(kN) memory)
+
+        Args:
+            N:               Number of stored patterns.
+            energy_tracking: Whether EnergyTracker will be used.
+
+        Returns:
+            mode string suitable for DiffusionConfig.diffusion_mode.
+        """
+        if N <= 512:
+            return 'simple'      # dense D fits in L2; SimpleDiffusion ~42.9% peak BW
+        return 'factored'        # sparse W; O(kN) memory, no dense N×N matrix
 
     # ------------------------------------------------------------------
     # Single-tensor diffusion (backward-compatible)

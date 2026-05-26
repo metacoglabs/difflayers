@@ -211,3 +211,72 @@ class Engine(Adapter):
         log_pi -= log_pi.mean()
 
         return np.exp(log_pi)
+
+    # ── Batched / fused public API  (P0-C / P1-D) ───────────────────────────
+
+    def predict_precision_batch(
+        self, corrupted_queries: "np.ndarray"
+    ) -> "np.ndarray":
+        """
+        Process B queries simultaneously with a single (K,N)@(N,B) matmul.
+
+        Arithmetic intensity improvement over the serial path:
+            Before: 2 × (K,N)@(N,) per query  → AI ≈ 0.25 FLOPs/byte (per query)
+            After : 1 × (K,N)@(N,B) matmul     → AI ≈ 2.0 FLOPs/byte at B=32
+
+        X is read ONCE for all B queries (vs B times in the serial loop).
+
+        Parameters
+        ----------
+        corrupted_queries : array-like, shape (B, N)
+            Batch of masked + Gaussian-corrupted queries.
+
+        Returns
+        -------
+        pi_batch : ndarray, shape (B, N)
+            Per-coordinate precision vectors; mean ≈ 1, values in [0.1, 10.0].
+        """
+        _fp_guard = dict(all="ignore")
+        Y = np.asarray(corrupted_queries, dtype=np.float64)   # (B, N)
+        B, N = Y.shape
+
+        # Signal 3: per-coordinate reliability mask  (B, N)
+        Z      = (Y - self._mu) / self._sigma                 # (B, N)
+        W_rel  = np.exp(-self._GAMMA * Z * Z)                 # (B, N)
+        W_rel  = np.clip(W_rel, 1e-9, 1.0)
+        log_W  = np.log(W_rel)                                # (B, N)
+
+        # Fused class scores — X read ONCE for all B queries  (P0-C key change)
+        # Shape: (K, B)  via  (K, N) @ (N, B)
+        Y_weighted = (Y * W_rel).T                            # (N, B)
+        with np.errstate(**_fp_guard):
+            scores = self._X @ Y_weighted                     # (K, B)
+        scores = np.nan_to_num(scores, nan=0.0, posinf=1e9, neginf=-1e9)
+
+        # Per-query class identification & log-space fusion
+        results = np.empty((B, N), dtype=np.float64)
+        for b in range(B):
+            s = scores[:, b]                                  # (K,)
+
+            top2   = np.argpartition(s, -2)[-2:]
+            s_top2 = np.sort(s[top2])
+            margin = (s_top2[-1] - s_top2[-2]) / (np.abs(s_top2[-1]) + self._EPS)
+
+            if margin < self._DELTA:
+                s_shifted = s - s.max()
+                w_c       = np.exp(self._TAU * s_shifted)
+                w_c      /= w_c.sum()
+                log_pi_q  = w_c @ self._log_pi_star           # (N,)
+            else:
+                c_hat    = int(np.argmax(s))
+                log_pi_q = self._log_pi_star[c_hat]           # (N,)
+
+            alpha  = self._ALPHA
+            rho    = self._RHO
+            log_pi = alpha * log_pi_q + (1.0 - alpha) * self._log_pi_H + rho * log_W[b]
+            log_pi -= log_pi.mean()
+            log_pi  = np.clip(log_pi, np.log(0.1), np.log(10.0))
+            log_pi -= log_pi.mean()
+            results[b] = np.exp(log_pi)
+
+        return results

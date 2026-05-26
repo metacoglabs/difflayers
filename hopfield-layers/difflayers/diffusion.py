@@ -32,7 +32,7 @@ Complexity:
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Dict, Optional, Tuple
 
 import torch
 from torch import Tensor
@@ -196,7 +196,8 @@ class IterativeDiffusion(DiffusionOperator):
     Precomputes D once; applies it ``steps`` times per call.
     Equivalent to (I - eta*L)^steps X without re-recomputing L.
 
-    Over-smoothing guard: stops early if ||X_t - X_{t-1}||_F < tol.
+    Over-smoothing guard: stops early if ||X_t - X_{t-1}||_F < tol
+    or if signal energy collapses below 10% (P2-A BUG-05).
 
     Complexity:
         precompute : O(N²)
@@ -218,11 +219,33 @@ class IterativeDiffusion(DiffusionOperator):
         self._check_ready()
         if self.eta == 0.0 or self.steps == 0:
             return X
-        for _ in range(self.steps):
+        X_init_norm = torch.norm(X).item() + 1e-8
+        for s in range(self.steps):
             X_new = _matmul(self._op, X)
-            # Early stopping: over-smoothing guard.
-            if torch.norm(X_new - X).item() < self.early_stop_tol:
-                break
+            # P2-A BUG-05: convergence guard (frobenius delta)
+            delta = torch.norm(X_new - X).item()
+            if delta < self.early_stop_tol:
+                import warnings
+                warnings.warn(
+                    f"IterativeDiffusion: early stop at s={s}/{self.steps} "
+                    f"(convergence delta={delta:.2e}). "
+                    f"Consider reducing steps to ≤ {s + 1}.",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+                return X_new
+            # P2-A BUG-05: signal energy collapse guard
+            signal_energy = torch.norm(X_new).item() / X_init_norm
+            if signal_energy < 0.1:
+                import warnings
+                warnings.warn(
+                    f"IterativeDiffusion: signal energy collapsed at s={s} "
+                    f"(ratio={signal_energy:.3f}). Stopping to prevent "
+                    f"over-smoothing.",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+                return X   # return last good state before collapse
             X = X_new
         return X
 
@@ -235,15 +258,28 @@ class SpectralDiffusion(DiffusionOperator):
     Unconditionally stable for all eta > 0.  More expensive than Euler
     methods to precompute but cheap to apply (single matmul).
 
+    P1-B: Eigendecomposition is cached at the class level keyed on
+    (L.shape, L.sum(), eta) so it is computed ONCE across all instances
+    and forward calls that share the same Laplacian.
+
     Complexity:
-        precompute : O(N³) — full symmetric eigendecomposition
-        __call__   : O(N²d)
+        precompute (first call) : O(N³) — full symmetric eigendecomposition
+        precompute (cache hit)  : O(1)
+        __call__                : O(N²d)
     """
+
+    # P1-B: class-level eigendecomp cache keyed on (shape, sum_fingerprint, eta)
+    _EIGENDECOMP_CACHE: Dict[tuple, Tensor] = {}
 
     def _build_operator(self, L: Tensor) -> Tensor:
         L_dense = (L.to_dense() if L.is_sparse else L).float()
+        # P1-B: cache key uses shape + rounded sum as a lightweight fingerprint
+        key = (tuple(L_dense.shape), round(float(L_dense.sum()), 4), self.eta)
+        if key in SpectralDiffusion._EIGENDECOMP_CACHE:
+            return SpectralDiffusion._EIGENDECOMP_CACHE[key]
         eigenvalues, U = torch.linalg.eigh(L_dense)            # (N,), (N, N)
         H = U @ torch.diag(torch.exp(-self.eta * eigenvalues)) @ U.t()
+        SpectralDiffusion._EIGENDECOMP_CACHE[key] = H
         return H                                                # (N, N)
 
     def __call__(self, X: Tensor) -> Tensor:
@@ -252,6 +288,11 @@ class SpectralDiffusion(DiffusionOperator):
             return X
         H = self._op.to(dtype=X.dtype, device=X.device)
         return _matmul(H, X)
+
+    @classmethod
+    def clear_cache(cls) -> None:
+        """Evict all cached heat kernels.  Call when Laplacians change."""
+        cls._EIGENDECOMP_CACHE.clear()
 
 
 class FactoredDiffusion(DiffusionOperator):
@@ -363,6 +404,40 @@ class FactoredDiffusion(DiffusionOperator):
                 X = scale * X + eta * Wx_flat.reshape(S, B, d)
 
         return X
+
+    def apply_with_laplacian_trace(self, K: Tensor) -> Tuple[Tensor, float]:
+        """
+        Apply one factored-diffusion step and return the Laplacian trace term
+        without ever materialising the dense L matrix  (P1-A / BUG-03).
+
+        Uses the sparse identity:
+            L·K = D_deg·K − W·K
+            tr(Kᵀ·L·K) = (deg ⊕ ‖k_i‖²).sum() − (WK ⊕ K).sum()
+
+        This lets EnergyTracker work with FactoredDiffusion without
+        the full N×N Laplacian.
+
+        Args:
+            K: (N, d) key patterns.
+
+        Returns:
+            (DK, lap_trace):
+                DK        — (N, d) diffused patterns (one step).
+                lap_trace — float scalar ≈ tr(Kᵀ·L·K).
+        """
+        if self._W is None or self._deg is None:
+            raise RuntimeError(
+                "FactoredDiffusion: call precompute_from_graph() before "
+                "apply_with_laplacian_trace()."
+            )
+        K_2d  = K.mean(dim=1) if K.dim() == 3 else K              # (N, d)
+        DdegK = self._deg.unsqueeze(-1) * K_2d                    # (N, d)
+        WK    = (torch.sparse.mm(self._W, K_2d)
+                 if self._W.is_sparse else self._W @ K_2d)        # (N, d)
+        LK        = DdegK - WK                                    # (N, d)
+        lap_trace = float(torch.sum(K_2d * LK).item())            # tr(KᵀLK)
+        DK        = K_2d - self.eta * LK                          # one diffusion step
+        return DK, lap_trace
 
 
 # ---------------------------------------------------------------------------
