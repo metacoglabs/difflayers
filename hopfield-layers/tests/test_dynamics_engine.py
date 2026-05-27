@@ -87,7 +87,11 @@ def test_energy_tracker_records_alias():
 # ---------------------------------------------------------------------------
 
 def test_energy_dissipation_monotone():
-    """E(t) should be non-increasing on ≥ 90% of random seeds (Theorem 2)."""
+    """E(t) should be non-increasing on ≥ 90% of random seeds (Theorem 2).
+
+    Theorem 2 (Hopfield fixed-point): energy is monotone ONLY when V = K
+    (values equal stored keys).  With random V the theorem does not apply.
+    """
     N, d, T = 12, 8, 5
     n_seeds = 10
     monotone_count = 0
@@ -99,7 +103,7 @@ def test_energy_dissipation_monotone():
         )
         Q = torch.randn(N, d)
         K = X.clone()
-        V = torch.randn(N, d)
+        V = K.clone()   # V = K  — required for Hopfield fixed-point theorem
         engine.run_dynamics(Q, K, V, adj_indices=adj, L=L, W=W, deg=deg,
                             diffuse_query=False, diffuse_key=True)
         E = tracker.history
@@ -107,11 +111,11 @@ def test_energy_dissipation_monotone():
         if is_monotone:
             monotone_count += 1
 
-    # EnergyTracker uses simplified energy (mean instead of logsumexp) so
-    # strict per-seed monotonicity is not guaranteed; majority (≥ 6/10) suffices.
-    assert monotone_count >= 6, (
+    # With V=K and fixed K (pre-diffused once), logsumexp energy is guaranteed
+    # monotone by the Hopfield fixed-point theorem; expect ≥ 9/10 seeds.
+    assert monotone_count >= 9, (
         f"Energy monotone on only {monotone_count}/10 seeds — "
-        f"expected ≥ 6 (Theorem 2, simplified energy tracker)"
+        f"expected ≥ 9 (Theorem 2, V=K, logsumexp energy)"
     )
 
 

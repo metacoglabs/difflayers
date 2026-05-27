@@ -5,6 +5,7 @@ Synthetic data generation utilities for graph-regularized Hopfield experiments.
 import torch
 import numpy as np
 from torch import Tensor
+from typing import Tuple
 
 
 def generate_patterns(N: int, d: int, seed: int = 42) -> Tensor:
@@ -96,3 +97,75 @@ def add_noise(x: Tensor, p: float, seed: int = 0) -> Tensor:
         generator=rng,
     ).bool()
     return torch.where(flip_mask, -x, x)
+
+
+def load_mnist_pca(
+    N_per_class: int = 20,
+    d: int = 64,
+    seed: int = 42,
+    data_root: str = "./data",
+) -> Tuple[Tensor, Tensor]:
+    """
+    Load MNIST, project to *d*-dimensional PCA space, and return L2-normalised
+    float32 patterns together with integer class labels.
+
+    Uses the training split.  Patterns are L2-normalised so cosine similarity
+    equals dot product — consistent with the rest of the codebase.
+
+    Args:
+        N_per_class: Number of stored patterns per class (0-9).  Total N = 10 * N_per_class.
+        d:           PCA output dimension.  Must be ≤ 784.
+        seed:        Random seed for selecting which examples to keep.
+        data_root:   Directory where torchvision will cache MNIST.
+
+    Returns:
+        patterns: (N, d) float32 tensor, L2-normalised.
+        labels:   (N,) int64 tensor, class indices in [0, 9].
+
+    Raises:
+        ImportError: If torchvision or scikit-learn are not installed.
+    """
+    try:
+        import torchvision
+        import torchvision.transforms as T
+    except ImportError as exc:
+        raise ImportError("torchvision is required: pip install torchvision") from exc
+    try:
+        from sklearn.decomposition import PCA
+    except ImportError as exc:
+        raise ImportError("scikit-learn is required: pip install scikit-learn") from exc
+
+    rng = np.random.RandomState(seed)
+
+    ds = torchvision.datasets.MNIST(
+        root=data_root, train=True, download=True,
+        transform=T.ToTensor(),
+    )
+
+    # Collect N_per_class examples for each of the 10 digit classes
+    all_images = []
+    all_labels = []
+    all_targets = np.array(ds.targets)
+    for cls in range(10):
+        idxs = np.where(all_targets == cls)[0]
+        chosen = rng.choice(idxs, size=N_per_class, replace=False)
+        for i in chosen:
+            img, lbl = ds[int(i)]
+            all_images.append(img.view(-1).numpy())  # (784,)
+            all_labels.append(lbl)
+
+    X = np.stack(all_images, axis=0).astype(np.float32)  # (N, 784)
+    labels = np.array(all_labels, dtype=np.int64)
+
+    # PCA projection
+    pca = PCA(n_components=d, random_state=seed)
+    X_pca = pca.fit_transform(X).astype(np.float32)     # (N, d)
+
+    # L2 normalise
+    norms = np.linalg.norm(X_pca, axis=1, keepdims=True)
+    norms = np.maximum(norms, 1e-8)
+    X_pca /= norms
+
+    patterns = torch.from_numpy(X_pca)
+    labels_t = torch.from_numpy(labels)
+    return patterns, labels_t

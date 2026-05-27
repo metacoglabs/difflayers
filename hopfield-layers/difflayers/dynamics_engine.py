@@ -339,7 +339,9 @@ class EnergyTracker:
         """
         Q_2d = Q.mean(dim=1) if Q.dim() == 3 else Q
         K_2d = K.mean(dim=1) if K.dim() == 3 else K
-        affinity   = -(self.beta * Q_2d @ K_2d.t()).mean()
+        # True Hopfield energy: F(Q) = -logsumexp(β·Q·Kᵀ)/β (monotone by fixed-point
+        # theorem when K is fixed and Q is updated by softmax attention).
+        affinity   = -torch.logsumexp(self.beta * Q_2d @ K_2d.t(), dim=-1).mean()
         smoothness = self.eta * torch.trace(K_2d.t() @ L @ K_2d) / K_2d.shape[0]
         energy     = (affinity + smoothness).item()
         self._history.append(energy)
@@ -374,7 +376,8 @@ class EnergyTracker:
         Q_2d = Q.mean(dim=1) if Q.dim() == 3 else Q
         K_2d = K.mean(dim=1) if K.dim() == 3 else K
 
-        affinity = -(self.beta * Q_2d @ K_2d.t()).mean()
+        # True Hopfield energy (logsumexp form) — monotone by fixed-point theorem.
+        affinity = -torch.logsumexp(self.beta * Q_2d @ K_2d.t(), dim=-1).mean()
         K_norms_sq = (K_2d * K_2d).sum(dim=-1)                  # (N,)
         deg_term = (deg * K_norms_sq).sum()
         WK = torch.sparse.mm(W, K_2d) if W.is_sparse else W @ K_2d
@@ -466,17 +469,25 @@ class DynamicsEngine:
 
         Args:
             Q:             (N, d) or (S, B, d) query patterns.
-            K:             (N, d) or (S, B, d) key patterns.
+            K:             (N, d) or (S, B, d) key patterns (stored, static).
             V:             (N, d) or (S, B, d) value patterns.
             adj_indices:   (N, k) neighbor indices — required for graph attention.
             L:             (N, N) Laplacian — for L-based energy tracking.
             W:             (N, N) adjacency — for factored energy tracking.
             deg:           (N,) degree vector — for factored energy tracking.
-            diffuse_query: Whether to diffuse Q each iteration.
-            diffuse_key:   Whether to diffuse K each iteration.
+            diffuse_query: Whether to diffuse Q at each iteration.
+            diffuse_key:   Whether to diffuse K once before the loop.
 
         Returns:
-            (Q, K): Tuple of updated queries and diffused keys after T steps.
+            (Q, K): Tuple of updated query and once-diffused keys.
+
+        Note on K diffusion:
+            Stored patterns K represent STATIC memory — they are diffused
+            ONCE before the dynamics loop to create a smoother energy
+            landscape.  Cumulative re-diffusion of K at every step causes
+            over-smoothing: for clustered patterns with k-NN graph, T
+            applications of the heat kernel collapse all patterns in a
+            cluster to the cluster centroid, destroying discriminability.
 
         Complexity per step:
             diffusion : O(kNd) factored sparse  or  O(N^2 d) dense
@@ -515,9 +526,13 @@ class DynamicsEngine:
             and not use_energy_L
         )
 
+        # Diffuse stored patterns ONCE before the loop.
+        # K represents static memory — re-diffusing at every step causes
+        # cumulative over-smoothing that collapses cluster structure.
+        if diffuse_key:
+            K = self._diff_op(K)
+
         for _ in range(self._steps):
-            if diffuse_key:
-                K = self._diff_op(K)
             if diffuse_query:
                 Q = (self._query_diff_op if self._query_diff_op is not None
                      else self._diff_op)(Q)

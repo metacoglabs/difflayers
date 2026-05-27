@@ -30,7 +30,7 @@ import numpy as np
 import pandas as pd
 
 from difflayers import Hopfield, DiffusedHopfield
-from src.utils.data_gen import generate_patterns, generate_clustered_patterns, add_noise
+from src.utils.data_gen import generate_patterns, generate_clustered_patterns, add_noise, load_mnist_pca
 from src.utils.metrics import accuracy
 
 
@@ -41,7 +41,9 @@ from src.utils.metrics import accuracy
 def _build_retrieval_model(diffused: bool, N: int, d: int, beta: float,
                             eta: float, k: int, device: torch.device,
                             diffusion_mode: str = "iterative",
-                            diffusion_steps: int = 3):
+                            diffusion_steps: int = 3,
+                            diffuse_query: bool = False,
+                            diffuse_key: bool = True):
     """
     Return a (Diffused)Hopfield module configured for static pattern retrieval.
 
@@ -68,7 +70,7 @@ def _build_retrieval_model(diffused: bool, N: int, d: int, beta: float,
     if diffused:
         model = DiffusedHopfield(**common, eta=eta, k_neighbors=k,
                                  use_normalized_laplacian=True,
-                                 diffuse_query=False, diffuse_key=True,
+                                 diffuse_query=diffuse_query, diffuse_key=diffuse_key,
                                  diffusion_mode=diffusion_mode,
                                  diffusion_steps=diffusion_steps)
     else:
@@ -114,29 +116,34 @@ def run_noise_robustness(
     N: int = 200,
     d: int = 64,
     beta: float = 12.0,
-    eta: float = 0.10,
-    k: int = 7,
+    eta: float = 0.05,
+    k: int = 3,
     M: int = 500,
     noise_levels: list = None,
-    diffusion_mode: str = "spectral",
-    diffusion_steps: int = 3,
+    diffusion_mode: str = "factored",
+    diffusion_steps: int = 1,
     n_clusters: int = 20,
     seed: int = 42,
     results_dir: str = "results",
+    use_real_data: bool = False,
+    diffuse_query: bool = False,
 ) -> pd.DataFrame:
     """
     Run the noise-robustness experiment and return a results DataFrame.
 
     Args:
-        N:            Number of stored patterns.
-        d:            Pattern dimensionality.
-        beta:         Hopfield scaling (β).
-        eta:          Diffusion strength for DiffusedHopfield.
-        k:            kNN neighbours in similarity graph.
-        M:            Number of noisy queries generated per noise level.
-        noise_levels: List of flip probabilities to sweep.
-        seed:         Master random seed.
-        results_dir:  Directory where CSV and plots are saved.
+        N:              Number of stored patterns (10 * N_per_class when use_real_data=True).
+        d:              Pattern dimensionality.
+        beta:           Hopfield scaling (β).
+        eta:            Diffusion strength for DiffusedHopfield.
+        k:              kNN neighbours in similarity graph.
+        M:              Number of noisy queries generated per noise level.
+        noise_levels:   List of flip probabilities to sweep.
+        seed:           Master random seed.
+        results_dir:    Directory where CSV and plots are saved.
+        use_real_data:  If True, use MNIST-PCA features instead of synthetic patterns.
+                        N must be a multiple of 10 (N_per_class = N // 10).
+        diffuse_query:  If True, also diffuse query patterns (in addition to keys).
 
     Returns:
         df: DataFrame with columns
@@ -150,13 +157,22 @@ def run_noise_robustness(
         noise_levels = [0.0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.5, 0.6]
 
     device = torch.device("cpu")
-    patterns = generate_clustered_patterns(
-        N, d, n_clusters=n_clusters, seed=seed
-    ).to(device)   # (N, d)
+    if use_real_data:
+        n_per_class = N // 10
+        if N % 10 != 0:
+            raise ValueError(f"N must be a multiple of 10 for MNIST-PCA; got N={N}")
+        print(f"Loading MNIST-PCA (N_per_class={n_per_class}, d={d}) …")
+        patterns, _labels = load_mnist_pca(N_per_class=n_per_class, d=d, seed=seed)
+    else:
+        patterns = generate_clustered_patterns(
+            N, d, n_clusters=n_clusters, seed=seed
+        )
+    patterns = patterns.to(device)   # (N, d)
 
-    baseline_model  = _build_retrieval_model(False, N, d, beta, eta, k, device)
-    diffused_model  = _build_retrieval_model(True,  N, d, beta, eta, k, device,
-                                              diffusion_mode, diffusion_steps)
+    baseline_model = _build_retrieval_model(False, N, d, beta, eta, k, device)
+    diffused_model = _build_retrieval_model(True,  N, d, beta, eta, k, device,
+                                             diffusion_mode, diffusion_steps,
+                                             diffuse_query=diffuse_query)
 
     rows = []
     for p in noise_levels:
