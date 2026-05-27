@@ -15,6 +15,7 @@ Run a specific experiment:
     python main.py --exp modes
     python main.py --exp logit
     python main.py --exp all       (default)
+    python main.py --exp profile   (§11.3 scaling table)
 
 Key flags
 ---------
@@ -53,7 +54,7 @@ def _parse_args():
     p = argparse.ArgumentParser(description="Graph-Regularized Hopfield Experiments")
     p.add_argument("--exp",     default="all",
                    choices=["all", "noise", "ablation", "attention",
-                            "steps", "modes", "logit", "bench"],
+                            "steps", "modes", "logit", "bench", "profile"],
                    help="Which experiment(s) to run")
     p.add_argument("--N",       type=int,   default=200,   help="Number of stored patterns")
     p.add_argument("--d",       type=int,   default=64,    help="Pattern dimensionality")
@@ -219,6 +220,19 @@ def run_logit(args):
     return df
 
 
+def run_scaling_profile(args):
+    print("\n" + "=" * 60)
+    print("SCALING PROFILE — §11.3 Memory Bandwidth Sweep")
+    print("=" * 60)
+    from src.experiments.scaling_profile import run_scaling_sweep
+    return run_scaling_sweep(
+        d=args.d,
+        k=args.k,
+        T=args.steps,
+        results_dir=args.results,
+    )
+
+
 def _print_summary(noise_df, ablation_df, attn_df, steps_df, modes_df, logit_df):
     print("\n" + "=" * 60)
     print("SUMMARY")
@@ -298,6 +312,9 @@ def main():
         from src.experiments.benchmark import run_benchmark
         run_benchmark(N=args.N, d=args.d, k=args.k, eta=args.eta,
                       seed=args.seed, results_dir=args.results)
+
+    if args.exp == "profile":
+        run_scaling_profile(args)
 
     if args.exp == "all":
         _print_summary(noise_df, ablation_df, attn_df,
