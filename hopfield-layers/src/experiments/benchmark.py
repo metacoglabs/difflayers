@@ -53,7 +53,7 @@ def _time_fn(fn, n_repeats: int = 20):
 
 def _build_base(N, d, k, seed=42):
     """Return (patterns, L_dense) for timing experiments."""
-    patterns = generate_clustered_patterns(N, d, n_clusters=max(4, N // 10), seed=seed)
+    patterns, _ = generate_clustered_patterns(N, d, n_clusters=max(4, N // 10), seed=seed)
     S = build_similarity_matrix(patterns)
     A = build_knn_graph(S, k)
     L = compute_normalized_laplacian(A)
@@ -114,7 +114,7 @@ def bench_sparse_vs_dense(
     n_repeats: int = 20, seed: int = 42,
 ) -> pd.DataFrame:
     """Compare O(kN) torch.sparse.mm vs dense matmul inside SimpleDiffusion."""
-    patterns = generate_clustered_patterns(N, d, n_clusters=max(4, N // 10), seed=seed)
+    patterns, _ = generate_clustered_patterns(N, d, n_clusters=max(4, N // 10), seed=seed)
     S = build_similarity_matrix(patterns)
 
     rows = []

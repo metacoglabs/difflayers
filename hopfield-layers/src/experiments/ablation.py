@@ -140,9 +140,10 @@ def run_ablation(
     np.random.seed(seed)
 
     device = torch.device("cpu")
-    patterns = generate_clustered_patterns(
-        N, d, n_clusters=n_clusters, seed=seed
-    ).to(device)  # (N, d)
+    patterns, cluster_labels = generate_clustered_patterns(
+        N, d, n_clusters=n_clusters, seed=seed, return_labels=True
+    )
+    patterns = patterns.to(device)  # (N, d)
 
     rng = torch.Generator()
     rng.manual_seed(seed + 1)

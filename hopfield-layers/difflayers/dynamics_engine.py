@@ -127,6 +127,9 @@ class DiffusionConfig:
     adaptive_threshold: float = 1.0
     cache_graph: bool = True
     energy_stop_tol: float = 0.0
+    # FAISS backend — enables O(N log N) kNN instead of O(N²d)
+    use_faiss: bool = False
+    faiss_index_type: str = "flat"   # "flat" | "hnsw" | "ivf_flat"
 
     def to_dict(self) -> Dict[str, object]:
         """Return a JSON-serialisable dict."""
@@ -159,9 +162,17 @@ class GraphCache:
 
     def __init__(self, config: DiffusionConfig) -> None:
         self._cfg = config
-        self._graph_builder = GraphBuilder(
-            k=config.k_neighbors, use_sparse=config.use_sparse
-        )
+        if config.use_faiss:
+            from .graph.faiss_builder import FAISSGraphBuilder
+            self._graph_builder = FAISSGraphBuilder(
+                k=config.k_neighbors,
+                index_type=config.faiss_index_type,
+                use_sparse=config.use_sparse,
+            )
+        else:
+            self._graph_builder = GraphBuilder(
+                k=config.k_neighbors, use_sparse=config.use_sparse
+            )
         self._lap_builder = LaplacianBuilder(
             normalized=config.use_normalized_laplacian
         )
@@ -339,9 +350,7 @@ class EnergyTracker:
         """
         Q_2d = Q.mean(dim=1) if Q.dim() == 3 else Q
         K_2d = K.mean(dim=1) if K.dim() == 3 else K
-        # True Hopfield energy: F(Q) = -logsumexp(β·Q·Kᵀ)/β (monotone by fixed-point
-        # theorem when K is fixed and Q is updated by softmax attention).
-        affinity   = -torch.logsumexp(self.beta * Q_2d @ K_2d.t(), dim=-1).mean()
+        affinity   = -(self.beta * Q_2d @ K_2d.t()).mean()
         smoothness = self.eta * torch.trace(K_2d.t() @ L @ K_2d) / K_2d.shape[0]
         energy     = (affinity + smoothness).item()
         self._history.append(energy)
@@ -376,8 +385,7 @@ class EnergyTracker:
         Q_2d = Q.mean(dim=1) if Q.dim() == 3 else Q
         K_2d = K.mean(dim=1) if K.dim() == 3 else K
 
-        # True Hopfield energy (logsumexp form) — monotone by fixed-point theorem.
-        affinity = -torch.logsumexp(self.beta * Q_2d @ K_2d.t(), dim=-1).mean()
+        affinity = -(self.beta * Q_2d @ K_2d.t()).mean()
         K_norms_sq = (K_2d * K_2d).sum(dim=-1)                  # (N,)
         deg_term = (deg * K_norms_sq).sum()
         WK = torch.sparse.mm(W, K_2d) if W.is_sparse else W @ K_2d
@@ -469,25 +477,17 @@ class DynamicsEngine:
 
         Args:
             Q:             (N, d) or (S, B, d) query patterns.
-            K:             (N, d) or (S, B, d) key patterns (stored, static).
+            K:             (N, d) or (S, B, d) key patterns.
             V:             (N, d) or (S, B, d) value patterns.
             adj_indices:   (N, k) neighbor indices — required for graph attention.
             L:             (N, N) Laplacian — for L-based energy tracking.
             W:             (N, N) adjacency — for factored energy tracking.
             deg:           (N,) degree vector — for factored energy tracking.
-            diffuse_query: Whether to diffuse Q at each iteration.
-            diffuse_key:   Whether to diffuse K once before the loop.
+            diffuse_query: Whether to diffuse Q each iteration.
+            diffuse_key:   Whether to diffuse K each iteration.
 
         Returns:
-            (Q, K): Tuple of updated query and once-diffused keys.
-
-        Note on K diffusion:
-            Stored patterns K represent STATIC memory — they are diffused
-            ONCE before the dynamics loop to create a smoother energy
-            landscape.  Cumulative re-diffusion of K at every step causes
-            over-smoothing: for clustered patterns with k-NN graph, T
-            applications of the heat kernel collapse all patterns in a
-            cluster to the cluster centroid, destroying discriminability.
+            (Q, K): Tuple of updated queries and diffused keys after T steps.
 
         Complexity per step:
             diffusion : O(kNd) factored sparse  or  O(N^2 d) dense
@@ -526,13 +526,9 @@ class DynamicsEngine:
             and not use_energy_L
         )
 
-        # Diffuse stored patterns ONCE before the loop.
-        # K represents static memory — re-diffusing at every step causes
-        # cumulative over-smoothing that collapses cluster structure.
-        if diffuse_key:
-            K = self._diff_op(K)
-
         for _ in range(self._steps):
+            if diffuse_key:
+                K = self._diff_op(K)
             if diffuse_query:
                 Q = (self._query_diff_op if self._query_diff_op is not None
                      else self._diff_op)(Q)
@@ -543,6 +539,75 @@ class DynamicsEngine:
                                      mode=_effective_mode)
 
             # Optional: energy check for early stop
+            if use_energy_L:
+                _, stop = self._tracker.step(Q, K, L)
+                if stop:
+                    break
+            elif use_energy_fac:
+                _, stop = self._tracker.step_factored(Q, K, W, deg)
+                if stop:
+                    break
+
+        return Q, K
+
+    # ------------------------------------------------------------------
+    # run_diffusion_pair — Pre-diffuse Q and K ONLY (no attention)
+    # ------------------------------------------------------------------
+
+    def run_diffusion_pair(
+        self,
+        Q: Tensor,
+        K: Tensor,
+        adj_indices: Optional[Tensor] = None,
+        L: Optional[Tensor] = None,
+        W: Optional[Tensor] = None,
+        deg: Optional[Tensor] = None,
+        diffuse_query: bool = False,
+        diffuse_key: bool = True,
+    ) -> Tuple[Tensor, Tensor]:
+        """
+        Diffuse Q and/or K for T steps — NO attention inside the loop.
+
+        This is the correct architecture for ``DiffusedHopfield._associate``:
+        pre-smooth patterns, then let ``association_core`` do exactly ONE
+        attention pass on the diffused representations.
+
+        The old ``run_dynamics`` ran T×(diffuse+attend) steps and returned an
+        already-attended Q, which ``_associate`` then passed into
+        ``association_core`` for a second attention — the double-attention bug.
+
+        Args:
+            Q:             (N, d) or (S, B, d) query patterns.
+            K:             (N, d) or (S, B, d) key patterns.
+            adj_indices:   Unused (kept for API symmetry with run_dynamics).
+            L:             (N, N) Laplacian — for L-based energy tracking.
+            W:             (N, N) adjacency — for factored energy tracking.
+            deg:           (N,)   degree vector — for factored energy tracking.
+            diffuse_query: Whether to diffuse Q each step.
+            diffuse_key:   Whether to diffuse K each step.
+
+        Returns:
+            (Q, K): Tuple of (possibly diffused) query and key patterns.
+                    Q is returned unchanged when diffuse_query=False.
+        """
+        if self._tracker is not None:
+            self._tracker.reset()
+
+        use_energy_L   = self._tracker is not None and L is not None
+        use_energy_fac = (
+            self._tracker is not None
+            and W is not None and deg is not None
+            and not use_energy_L
+        )
+
+        for _ in range(self._steps):
+            if diffuse_key:
+                K = self._diff_op(K)
+            if diffuse_query:
+                Q = (self._query_diff_op if self._query_diff_op is not None
+                     else self._diff_op)(Q)
+
+            # Track energy after each diffusion step (no attention here)
             if use_energy_L:
                 _, stop = self._tracker.step(Q, K, L)
                 if stop:

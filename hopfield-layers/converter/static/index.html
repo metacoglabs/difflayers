@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MarkItDown · File to Markdown</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
+
+    :root {
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --surface2:  #21262d;
+      --border:    #30363d;
+      --text:      #e6edf3;
+      --muted:     #8b949e;
+      --accent:    #58a6ff;
+      --green:     #2ea043;
+      --green-bg:  #238636;
+      --red-bg:    #2d1111;
+      --red-border:#da3633;
+      --red-text:  #ff7b72;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      background: var(--bg); color: var(--text);
+      min-height: 100vh; display: flex; flex-direction: column;
+      align-items: center; padding: 2.5rem 1rem 4rem;
+    }
+
+    /* ── Header ── */
+    header { text-align: center; margin-bottom: 2.25rem }
+    header h1 { font-size: 1.6rem; font-weight: 700; letter-spacing: -.5px }
+    header p  { color: var(--muted); font-size: .9rem; margin-top: .35rem }
+    header .logo { font-size: 2rem; margin-bottom: .5rem }
+
+    /* ── Drop zone ── */
+    #drop-zone {
+      width: 100%; max-width: 660px;
+      border: 2px dashed var(--border); border-radius: 14px;
+      padding: 3.5rem 2rem; text-align: center;
+      cursor: pointer; transition: border-color .2s, background .2s;
+    }
+    #drop-zone:hover,
+    #drop-zone.drag-over {
+      border-color: var(--accent); background: var(--surface);
+    }
+    #drop-zone .icon { font-size: 2.8rem; margin-bottom: .75rem }
+    #drop-zone h2   { font-size: 1.05rem; font-weight: 600 }
+    #drop-zone p    { color: var(--muted); font-size: .85rem; margin-top: .4rem }
+    #drop-zone .hint {
+      margin-top: 1.1rem; font-size: .75rem; color: var(--muted);
+      line-height: 1.7;
+    }
+    #file-input { display: none }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex; align-items: center; gap: .4rem;
+      padding: .45rem 1rem; border-radius: 6px;
+      border: 1px solid var(--border); background: var(--surface2);
+      color: var(--text); font-size: .875rem; font-family: inherit;
+      cursor: pointer; transition: background .15s, border-color .15s;
+      white-space: nowrap;
+    }
+    .btn:hover { background: var(--border) }
+    .btn.primary {
+      background: var(--green-bg); border-color: var(--green);
+      color: #fff; font-weight: 600;
+    }
+    .btn.primary:hover { background: var(--green) }
+    .btn:disabled { opacity: .4; cursor: not-allowed; pointer-events: none }
+
+    /* ── Spinner ── */
+    #spinner { display: none; text-align: center; margin-top: 2.5rem; color: var(--accent) }
+    .spin-ring {
+      display: inline-block; width: 36px; height: 36px;
+      border: 3px solid var(--border); border-top-color: var(--accent);
+      border-radius: 50%; animation: spin .75s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg) } }
+    #spinner p { margin-top: .7rem; font-size: .875rem; color: var(--muted) }
+
+    /* ── Error box ── */
+    .error-box {
+      display: none; width: 100%; max-width: 660px;
+      background: var(--red-bg); border: 1px solid var(--red-border);
+      border-radius: 8px; padding: 1rem 1.2rem;
+      color: var(--red-text); font-size: .875rem;
+      margin-top: 1.5rem; line-height: 1.5;
+    }
+
+    /* ── Result panel ── */
+    #result { display: none; width: 100%; max-width: 960px; margin-top: 2rem }
+
+    .result-meta {
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: .75rem; margin-bottom: .85rem;
+    }
+    .result-meta .file-name {
+      font-weight: 600; font-size: .95rem;
+      max-width: 40ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .result-meta .badges { display: flex; gap: .5rem; align-items: center }
+    .badge {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 20px; padding: .2rem .7rem; font-size: .78rem;
+      color: var(--muted);
+    }
+    .badge b { color: var(--accent) }
+    .result-actions { display: flex; gap: .5rem; flex-wrap: wrap }
+
+    /* ── Output pane ── */
+    .output-wrap {
+      position: relative; border: 1px solid var(--border); border-radius: 10px;
+      overflow: hidden;
+    }
+    .output-toolbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: .5rem 1rem; background: var(--surface); border-bottom: 1px solid var(--border);
+      font-size: .78rem; color: var(--muted);
+    }
+    #md-output {
+      display: block; width: 100%; min-height: 420px; max-height: 68vh;
+      background: var(--surface); padding: 1.25rem 1.4rem;
+      font-family: "Menlo", "Consolas", "Fira Code", monospace;
+      font-size: .8rem; line-height: 1.7; color: var(--text);
+      overflow-y: auto; white-space: pre-wrap; word-break: break-word;
+      resize: vertical; border: none; outline: none;
+    }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed; bottom: 1.5rem; right: 1.5rem;
+      background: var(--green-bg); color: #fff;
+      padding: .6rem 1.2rem; border-radius: 8px; font-size: .85rem;
+      opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 9999;
+    }
+    .toast.show { opacity: 1 }
+
+    /* ── Responsive ── */
+    @media (max-width: 540px) {
+      .result-meta { flex-direction: column; align-items: flex-start }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">📄</div>
+  <h1>MarkItDown Converter</h1>
+  <p>Drop any document — get clean Markdown ready for Claude</p>
+</header>
+
+<!-- Drop zone -->
+<div id="drop-zone">
+  <div class="icon">⬆️</div>
+  <h2>Drag &amp; drop your file here</h2>
+  <p style="margin-top:.6rem">
+    <button class="btn" onclick="document.getElementById('file-input').click()">
+      Browse file…
+    </button>
+  </p>
+  <p class="hint">
+    PDF · DOCX · PPTX · XLSX · HTML · TXT · CSV · JSON · XML<br>
+    PNG · JPG · WEBP · GIF · ZIP &nbsp;·&nbsp; Max 50 MB
+  </p>
+  <input type="file" id="file-input"
+    accept=".pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.html,.htm,.txt,.md,.csv,.json,.xml,.png,.jpg,.jpeg,.webp,.gif,.zip" />
+</div>
+
+<!-- Spinner -->
+<div id="spinner">
+  <div class="spin-ring"></div>
+  <p>Converting with markitdown…</p>
+</div>
+
+<!-- Error -->
+<div class="error-box" id="error-box"></div>
+
+<!-- Result -->
+<div id="result">
+  <div class="result-meta">
+    <span class="file-name" id="result-filename"></span>
+    <div class="badges">
+      <span class="badge">~<b id="token-count">0</b> tokens</span>
+      <span class="badge"><b id="char-count">0</b> chars</span>
+    </div>
+  </div>
+
+  <div class="result-actions" style="margin-bottom:.75rem">
+    <button class="btn primary" onclick="copyMd()">📋 Copy Markdown</button>
+    <button class="btn" onclick="downloadMd()">⬇ Download .md</button>
+    <button class="btn" onclick="resetUI()">↩ Convert another</button>
+  </div>
+
+  <div class="output-wrap">
+    <div class="output-toolbar">
+      <span>Markdown output</span>
+      <span id="line-count"></span>
+    </div>
+    <pre id="md-output" contenteditable="true" spellcheck="false"></pre>
+  </div>
+</div>
+
+<div class="toast" id="toast">✓ Copied to clipboard!</div>
+
+<script>
+  // If served from Live Server (not port 8000), point API calls at FastAPI
+  const API_BASE = (window.location.port === '8000') ? '' : 'http://localhost:8000';
+
+  const dropZone   = document.getElementById('drop-zone');
+  const fileInput  = document.getElementById('file-input');
+  const spinner    = document.getElementById('spinner');
+  const errorBox   = document.getElementById('error-box');
+  const resultPane = document.getElementById('result');
+  const mdOutput   = document.getElementById('md-output');
+  let currentMd = '';
+  let currentFilename = 'output.md';
+
+  // ── Drag & drop events ──────────────────────────────────────────────────────
+  dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('drag-over') });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) upload(file);
+  });
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files[0]) upload(fileInput.files[0]);
+  });
+
+  // ── Upload & convert ────────────────────────────────────────────────────────
+  async function upload(file) {
+    // Reset UI
+    errorBox.style.display  = 'none';
+    resultPane.style.display = 'none';
+    dropZone.style.display  = 'none';
+    spinner.style.display   = 'block';
+
+    const fd = new FormData();
+    fd.append('file', file);
+
+    try {
+      const resp = await fetch(`${API_BASE}/convert`, { method: 'POST', body: fd });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.detail || `Server error ${resp.status}`);
+
+      currentMd = data.markdown || '';
+      currentFilename = (data.filename || 'output').replace(/\.[^.]+$/, '') + '.md';
+
+      document.getElementById('result-filename').textContent = data.filename;
+      document.getElementById('token-count').textContent = (data.token_estimate || 0).toLocaleString();
+      document.getElementById('char-count').textContent  = currentMd.length.toLocaleString();
+
+      const lines = currentMd.split('\n').length;
+      document.getElementById('line-count').textContent = `${lines.toLocaleString()} lines`;
+
+      mdOutput.textContent = currentMd;
+      resultPane.style.display = 'block';
+
+    } catch (err) {
+      errorBox.textContent = '⚠  ' + err.message;
+      errorBox.style.display = 'block';
+      dropZone.style.display = 'block';
+
+    } finally {
+      spinner.style.display = 'none';
+      fileInput.value = '';
+    }
+  }
+
+  // ── Actions ─────────────────────────────────────────────────────────────────
+  function copyMd() {
+    const text = mdOutput.innerText || mdOutput.textContent;
+    navigator.clipboard.writeText(text).then(showToast);
+  }
+
+  function downloadMd() {
+    const text = mdOutput.innerText || mdOutput.textContent;
+    const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = currentFilename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  function resetUI() {
+    resultPane.style.display = 'none';
+    errorBox.style.display   = 'none';
+    dropZone.style.display   = 'block';
+  }
+
+  function showToast() {
+    const t = document.getElementById('toast');
+    t.classList.add('show');
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => t.classList.remove('show'), 2200);
+  }
+</script>
+</body>
+</html>

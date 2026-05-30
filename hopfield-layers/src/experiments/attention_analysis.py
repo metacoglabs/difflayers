@@ -122,9 +122,10 @@ def run_attention_analysis(
         eta_values = [0.0, 0.01, 0.03, 0.05, 0.08, 0.1, 0.15, 0.2, 0.3]
 
     device = torch.device("cpu")
-    patterns = generate_clustered_patterns(
+    patterns, _cluster_labels = generate_clustered_patterns(
         N, d, n_clusters=n_clusters, seed=seed
-    ).to(device)
+    )
+    patterns = patterns.to(device)
 
     rng = torch.Generator()
     rng.manual_seed(seed + 7)

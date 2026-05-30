@@ -5,7 +5,7 @@ Synthetic data generation utilities for graph-regularized Hopfield experiments.
 import torch
 import numpy as np
 from torch import Tensor
-from typing import Tuple
+from typing import Optional, Tuple
 
 
 def generate_patterns(N: int, d: int, seed: int = 42) -> Tensor:
@@ -31,9 +31,14 @@ def generate_patterns(N: int, d: int, seed: int = 42) -> Tensor:
     return patterns
 
 
-def generate_clustered_patterns(N: int, d: int, n_clusters: int = 10,
-                                 intra_noise: float = 0.15,
-                                 seed: int = 42) -> Tensor:
+def generate_clustered_patterns(
+    N: int,
+    d: int,
+    n_clusters: int = 10,
+    intra_noise: float = 0.15,
+    seed: int = 42,
+    return_labels: bool = False,
+) -> Tuple[Tensor, Optional[Tensor]]:
     """
     Generate N patterns organised into clusters.
 
@@ -43,36 +48,46 @@ def generate_clustered_patterns(N: int, d: int, n_clusters: int = 10,
     making graph diffusion more effective than on fully random patterns.
 
     Args:
-        N:           Total number of patterns.
-        d:           Pattern dimension.
-        n_clusters:  Number of clusters.
-        intra_noise: Per-bit flip probability within a cluster (lower = tighter clusters).
-        seed:        Random seed for reproducibility.
+        N:             Total number of patterns.
+        d:             Pattern dimension.
+        n_clusters:    Number of clusters.
+        intra_noise:   Per-bit flip probability within a cluster
+                       (lower = tighter clusters, larger diffusion benefit).
+        seed:          Random seed for reproducibility.
+        return_labels: If True, also return a (N,) cluster-label tensor.
+                       Required for cluster_accuracy and energy gap metrics.
 
     Returns:
-        patterns: (N, d) float32 tensor, L2-normalised.
+        patterns:       (N, d) float32 tensor, L2-normalised.
+        cluster_labels: (N,) LongTensor of cluster indices (0..n_clusters-1),
+                        or None when return_labels=False.
     """
     rng = torch.Generator()
     rng.manual_seed(seed)
 
     per_cluster = N // n_clusters
-    remainder = N - per_cluster * n_clusters
+    remainder   = N - per_cluster * n_clusters
 
     centroids = torch.randint(0, 2, (n_clusters, d), generator=rng).float() * 2 - 1
 
     patterns_list = []
+    labels_list   = []
     for i in range(n_clusters):
-        n_i = per_cluster + (1 if i < remainder else 0)
+        n_i      = per_cluster + (1 if i < remainder else 0)
         centroid = centroids[i].unsqueeze(0).expand(n_i, d)
-        flip = torch.bernoulli(
+        flip     = torch.bernoulli(
             torch.full((n_i, d), intra_noise), generator=rng
         ).bool()
-        noisy = torch.where(flip, -centroid, centroid)
+        noisy    = torch.where(flip, -centroid, centroid)
         patterns_list.append(noisy)
+        labels_list.append(torch.full((n_i,), i, dtype=torch.long))
 
     patterns = torch.cat(patterns_list, dim=0)
     patterns = patterns / (d ** 0.5)
-    return patterns
+
+    if return_labels:
+        return patterns, torch.cat(labels_list, dim=0)
+    return patterns, None
 
 
 def add_noise(x: Tensor, p: float, seed: int = 0) -> Tensor:

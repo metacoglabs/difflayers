@@ -146,6 +146,8 @@ class DiffusedHopfield(Hopfield):
         adaptive_threshold: float = 1.0,
         cache_graph: bool = True,
         energy_stop_tol: float = 0.0,
+        use_faiss: bool = False,
+        faiss_index_type: str = "flat",
     ):
         super().__init__(
             input_size=input_size,
@@ -203,6 +205,8 @@ class DiffusedHopfield(Hopfield):
             adaptive_threshold=adaptive_threshold,
             cache_graph=cache_graph,
             energy_stop_tol=energy_stop_tol,
+            use_faiss=use_faiss,
+            faiss_index_type=faiss_index_type,
         )
 
         # Separate cache per role (key vs query patterns may differ in shape)
@@ -368,8 +372,12 @@ class DiffusedHopfield(Hopfield):
                 energy_tracker=self._energy_tracker,
                 query_diffusion_op=op_q_dyn,
             )
-            state_pattern, stored_pattern = engine.run_dynamics(
-                Q=state_pattern, K=stored_pattern, V=pattern_projection,
+            # Use run_diffusion_pair (pre-diffuse only — no attention inside loop).
+            # association_core below does the single attention pass.
+            # The old run_dynamics ran T×(diffuse+attend) and returned an
+            # already-attended Q, causing a double-attention on the next line.
+            state_pattern, stored_pattern = engine.run_diffusion_pair(
+                Q=state_pattern, K=stored_pattern,
                 adj_indices=_adj_k, L=L_k, W=_W_k, deg=_deg_k,
                 diffuse_query=cfg.diffuse_query, diffuse_key=cfg.diffuse_key,
             )

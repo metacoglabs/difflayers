@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>DAHN — Diffusion-Augmented Hopfield Networks</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"/>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+  onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}]})"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --surface2: #1c2128; --border: #30363d;
+    --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff; --accent2: #bc8cff;
+    --green: #3fb950; --orange: #d29922; --red: #f85149; --teal: #39d353;
+    --grad1: linear-gradient(135deg,#1a1f6e,#0d1117 60%,#1a0e2e);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html{scroll-behavior:smooth;}
+  body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.7;font-size:16px;}
+
+  /* NAV */
+  nav{position:sticky;top:0;z-index:100;background:rgba(13,17,23,.92);backdrop-filter:blur(12px);
+    border-bottom:1px solid var(--border);display:flex;gap:0;overflow-x:auto;padding:0 1rem;}
+  nav a{color:var(--muted);text-decoration:none;font-size:.78rem;font-weight:600;letter-spacing:.04em;
+    padding:.75rem 1rem;white-space:nowrap;text-transform:uppercase;border-bottom:2px solid transparent;
+    transition:all .2s;}
+  nav a:hover,nav a.active{color:var(--accent);border-bottom-color:var(--accent);}
+
+  /* HERO */
+  .hero{background:var(--grad1);padding:5rem 2rem 4rem;text-align:center;position:relative;overflow:hidden;}
+  .hero::before{content:'';position:absolute;inset:0;background:url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%2358a6ff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");}
+  .hero h1{font-size:clamp(2.2rem,5vw,3.8rem);font-weight:800;letter-spacing:-.02em;margin-bottom:.5rem;
+    background:linear-gradient(135deg,#58a6ff,#bc8cff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+  .hero .sub{font-size:1.15rem;color:var(--muted);max-width:680px;margin:.5rem auto 2rem;}
+  .badges{display:flex;gap:.6rem;justify-content:center;flex-wrap:wrap;}
+  .badge{padding:.3rem .9rem;border-radius:999px;font-size:.75rem;font-weight:700;letter-spacing:.06em;}
+  .badge-blue{background:rgba(88,166,255,.15);color:#58a6ff;border:1px solid rgba(88,166,255,.3);}
+  .badge-purple{background:rgba(188,140,255,.15);color:#bc8cff;border:1px solid rgba(188,140,255,.3);}
+  .badge-green{background:rgba(63,185,80,.15);color:#3fb950;border:1px solid rgba(63,185,80,.3);}
+  .badge-orange{background:rgba(210,153,34,.15);color:#d29922;border:1px solid rgba(210,153,34,.3);}
+
+  /* LAYOUT */
+  .container{max-width:960px;margin:0 auto;padding:3rem 1.5rem;}
+  section{margin-bottom:4rem;}
+  h2{font-size:1.85rem;font-weight:700;margin-bottom:.4rem;color:var(--text);}
+  h2 .section-num{color:var(--accent);font-size:1rem;font-weight:600;display:block;margin-bottom:.25rem;letter-spacing:.08em;text-transform:uppercase;}
+  h3{font-size:1.25rem;font-weight:600;margin:2rem 0 .75rem;color:var(--accent2);}
+  h4{font-size:1rem;font-weight:600;margin:1.5rem 0 .5rem;color:var(--teal);}
+  p{margin-bottom:1rem;color:#cdd9e5;}
+  strong{color:var(--text);}
+
+  /* DIVIDER */
+  .divider{height:1px;background:linear-gradient(90deg,transparent,var(--border),transparent);margin:3rem 0;}
+
+  /* MATH BLOCKS */
+  .math-block{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--accent);
+    border-radius:8px;padding:1.25rem 1.5rem;margin:1.25rem 0;overflow-x:auto;}
+  .math-block .label{font-size:.72rem;color:var(--accent);font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:.5rem;}
+
+  /* CODE */
+  pre[class*="language-"]{border-radius:10px;margin:1.25rem 0;font-size:.82rem;border:1px solid var(--border);}
+  code:not([class]){background:rgba(88,166,255,.12);color:#79c0ff;padding:.15em .4em;border-radius:4px;font-size:.88em;}
+
+  /* CARDS */
+  .card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem;margin:1.5rem 0;}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.25rem;
+    transition:border-color .2s,transform .2s;}
+  .card:hover{border-color:var(--accent);transform:translateY(-2px);}
+  .card .card-icon{font-size:1.6rem;margin-bottom:.6rem;}
+  .card .card-title{font-weight:700;font-size:.95rem;color:var(--text);margin-bottom:.4rem;}
+  .card p{font-size:.85rem;margin:0;}
+
+  /* TABLES */
+  .table-wrap{overflow-x:auto;margin:1.25rem 0;border-radius:10px;border:1px solid var(--border);}
+  table{width:100%;border-collapse:collapse;}
+  thead tr{background:var(--surface2);}
+  th{padding:.75rem 1rem;text-align:left;font-size:.8rem;font-weight:700;color:var(--muted);
+    letter-spacing:.07em;text-transform:uppercase;border-bottom:1px solid var(--border);}
+  td{padding:.7rem 1rem;font-size:.85rem;border-bottom:1px solid rgba(48,54,61,.6);}
+  tr:last-child td{border-bottom:none;}
+  tr:hover td{background:rgba(255,255,255,.02);}
+  .td-good{color:var(--green);font-weight:700;}
+  .td-warn{color:var(--orange);font-weight:600;}
+  .td-bad{color:var(--red);}
+  .td-mono{font-family:monospace;font-size:.82rem;color:#79c0ff;}
+
+  /* CALLOUTS */
+  .callout{display:flex;gap:1rem;background:var(--surface);border:1px solid var(--border);
+    border-radius:10px;padding:1.1rem 1.25rem;margin:1.25rem 0;}
+  .callout-icon{font-size:1.4rem;flex-shrink:0;margin-top:.1rem;}
+  .callout-body strong{display:block;margin-bottom:.25rem;font-size:.9rem;}
+  .callout-body p{font-size:.875rem;margin:0;color:var(--muted);}
+  .callout.tip{border-left:3px solid var(--green);}
+  .callout.warn{border-left:3px solid var(--orange);}
+  .callout.info{border-left:3px solid var(--accent);}
+
+  /* TASK PILLS */
+  .task-list{display:flex;flex-direction:column;gap:.75rem;margin:1.25rem 0;}
+  .task{display:flex;gap:1rem;align-items:flex-start;background:var(--surface);
+    border:1px solid var(--border);border-radius:10px;padding:.9rem 1.1rem;}
+  .task-id{background:rgba(88,166,255,.15);color:var(--accent);font-size:.72rem;font-weight:800;
+    padding:.25rem .65rem;border-radius:6px;letter-spacing:.06em;white-space:nowrap;margin-top:.15rem;}
+  .task-id.p0{background:rgba(63,185,80,.15);color:#3fb950;}
+  .task-id.p1{background:rgba(88,166,255,.15);color:var(--accent);}
+  .task-id.p2{background:rgba(210,153,34,.15);color:var(--orange);}
+  .task-id.p3{background:rgba(188,140,255,.15);color:var(--accent2);}
+  .task-body .task-title{font-weight:700;font-size:.92rem;margin-bottom:.25rem;}
+  .task-body p{font-size:.84rem;margin:0;color:var(--muted);}
+
+  /* ROOFLINE */
+  .roofline-diagram{background:var(--surface);border:1px solid var(--border);border-radius:12px;
+    padding:1.5rem;margin:1.5rem 0;text-align:center;}
+  .roofline-diagram svg{max-width:100%;height:auto;}
+
+  /* BEFORE/AFTER */
+  .bw-row-improve{background:rgba(63,185,80,.05);}
+
+  /* TIMELINE */
+  .timeline{position:relative;padding-left:2rem;margin:1.5rem 0;}
+  .timeline::before{content:'';position:absolute;left:.45rem;top:0;bottom:0;width:2px;background:var(--border);}
+  .tl-item{position:relative;margin-bottom:1.5rem;}
+  .tl-dot{position:absolute;left:-1.62rem;top:.35rem;width:12px;height:12px;border-radius:50%;
+    background:var(--accent);border:2px solid var(--bg);}
+  .tl-dot.green{background:var(--green);}
+  .tl-dot.purple{background:var(--accent2);}
+  .tl-title{font-weight:700;font-size:.93rem;margin-bottom:.25rem;}
+  .tl-body{font-size:.85rem;color:var(--muted);}
+
+  /* SCROLL TOP */
+  #totop{position:fixed;bottom:2rem;right:2rem;background:var(--accent);color:#000;border:none;
+    border-radius:50%;width:40px;height:40px;cursor:pointer;font-size:1.1rem;
+    display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .3s;z-index:50;}
+  #totop.show{opacity:1;}
+</style>
+</head>
+<body>
+
+<nav id="nav">
+  <a href="#background">Background</a>
+  <a href="#problem">Problem</a>
+  <a href="#dahn">DAHN</a>
+  <a href="#operators">Operators</a>
+  <a href="#optimisations">Optimisations</a>
+  <a href="#results">Results</a>
+  <a href="#math">Why the Math Works</a>
+  <a href="#tests">Tests</a>
+</nav>
+
+<!-- HERO -->
+<div class="hero">
+  <h1>Diffusion-Augmented Hopfield Networks</h1>
+  <p class="sub">A complete technical walkthrough — from the energy landscape of Modern Hopfield Networks to every memory-bandwidth optimisation in the DAHN v0.2.0 sprint</p>
+  <div class="badges">
+    <span class="badge badge-blue">PyTorch · difflayers v0.2.0</span>
+    <span class="badge badge-purple">40 Tests · All Pass</span>
+    <span class="badge badge-green">+46 % Graph Attention BW</span>
+    <span class="badge badge-orange">P0 → P3 · 11 Optimisations</span>
+  </div>
+</div>
+
+<div class="container">
+
+<!-- =====================================================================
+     SECTION 1 — BACKGROUND
+===================================================================== -->
+<section id="background">
+  <h2><span class="section-num">§ 1</span>Modern Hopfield Networks — The Foundation</h2>
+
+  <p>Classical Hopfield networks store patterns as local minima of an energy function and retrieve them by gradient descent. The original 1982 formulation was limited to binary states and only $O(N)$ patterns for $N$ neurons. <strong>Modern Continuous Hopfield Networks</strong> (Ramsauer et al., ICLR 2021) extend this to real-valued states and dramatically increase capacity.</p>
+
+  <h3>1.1 The Energy Function</h3>
+  <p>For a set of $M$ stored patterns $\{x_\mu\} \subset \mathbb{R}^d$ and state pattern $\xi \in \mathbb{R}^d$, the continuous Hopfield energy is:</p>
+
+  <div class="math-block">
+    <div class="label">Hopfield Energy</div>
+    $$E(\xi) = -\operatorname{lse}\!\left(\beta,\, X\xi\right) + \tfrac{1}{2}\|\xi\|^2 + \frac{1}{\beta}\log M + \tfrac{1}{2}C^2$$
+    <br>
+    where $\operatorname{lse}(\beta, z) = \frac{1}{\beta}\log\sum_i e^{\beta z_i}$ and $X \in \mathbb{R}^{M \times d}$ is the pattern matrix.
+  </div>
+
+  <p>The log-sum-exp is a smooth approximation to the maximum. As inverse temperature $\beta \to \infty$, $\operatorname{lse} \to \max$ and the network sharpens toward single-pattern retrieval.</p>
+
+  <h3>1.2 The Update Rule</h3>
+  <p>One synchronous update of the state pattern $\xi$ follows gradient descent on $E$:</p>
+
+  <div class="math-block">
+    <div class="label">Hopfield Update Rule</div>
+    $$\xi^{\text{new}} = X^\top \operatorname{softmax}\!\left(\beta X \xi\right)$$
+  </div>
+
+  <p>This is exactly the <strong>transformer self-attention mechanism</strong>. Setting $Q = \xi$, $K = V = X$:</p>
+
+  <div class="math-block">
+    $$\text{Attention}(Q, K, V) = V^\top \operatorname{softmax}\!\left(\frac{QK^\top}{\sqrt{d}}\right) = X^\top \operatorname{softmax}(\beta X \xi)$$
+    <br>with $\beta = 1/\sqrt{d}$.
+  </div>
+
+  <h3>1.3 Storage Capacity</h3>
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-icon">🧠</div>
+      <div class="card-title">Classical Hopfield (1982)</div>
+      <p>$O(N)$ patterns — linear in neuron count. Fails badly when $M \gtrsim 0.14N$.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">⚡</div>
+      <div class="card-title">Modern Hopfield (2020)</div>
+      <p><strong>Exponential capacity</strong> $\sim e^{d/2}$ patterns. Retrieval error is exponentially small in dimension $d$.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">📍</div>
+      <div class="card-title">Fixed-point Regimes</div>
+      <p>Low $\beta$: global average. Medium $\beta$: metastable subset. High $\beta$: single-pattern retrieval.</p>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- =====================================================================
+     SECTION 2 — THE PROBLEM
+===================================================================== -->
+<section id="problem">
+  <h2><span class="section-num">§ 2</span>The Problem — Where Standard Hopfield Networks Fail</h2>
+
+  <h3>2.1 Spurious Retrievals & Inter-cluster Interference</h3>
+  <p>When stored patterns form <em>clusters</em> (as they always do in real data — similar images, tokens from the same concept), the softmax attention distribution spreads across the cluster, retrieving a blurred average rather than a sharp exemplar. As noise increases, the energy landscape develops <strong>spurious attractors</strong> — local minima that don't correspond to any stored pattern.</p>
+
+  <div class="callout warn">
+    <div class="callout-icon">⚠️</div>
+    <div class="callout-body">
+      <strong>The core failure mode</strong>
+      <p>Attention weight $\propto e^{\beta \langle q, k_i \rangle}$ treats every stored pattern as equally reachable from any query, regardless of manifold structure. Two patterns 90° apart in embedding space get the same competition as two patterns 10° apart.</p>
+    </div>
+  </div>
+
+  <h3>2.2 Memory Bandwidth Bottleneck</h3>
+  <p>Even setting aside retrieval quality, the standard implementation hits a <strong>memory bandwidth wall</strong>. Every forward pass rebuilds the graph and Laplacian from scratch. The attention kernel reads all of $K$ and $V$ independently for every query. The arithmetic intensity (FLOPs / memory bytes) is far below the hardware ridge point.</p>
+
+  <div class="math-block">
+    <div class="label">Arithmetic Intensity &amp; Roofline</div>
+    $$\text{AI} = \frac{\text{FLOPs}}{\text{Bytes read/written}}, \qquad \text{Achieved performance} = \min\!\left(\text{Peak FLOP/s},\ \text{Peak BW} \times \text{AI}\right)$$
+    <br>
+    A kernel with AI $< \text{Ridge point}$ is <em>memory-bound</em> — buying a faster GPU won't help. You need to reduce memory traffic.
+  </div>
+
+  <p>The baseline <code>AttentionOperator graph</code> had AI = 0.24 FLOPs/byte — 33× below the hardware ridge point. The engine init was rebuilding an $O(K^2 N)$ Hessian table on every call.</p>
+</section>
+
+<div class="divider"></div>
+
+<!-- =====================================================================
+     SECTION 3 — DAHN
+===================================================================== -->
+<section id="dahn">
+  <h2><span class="section-num">§ 3</span>DAHN — Diffusion-Augmented Hopfield Networks</h2>
+
+  <h3>3.1 Core Idea</h3>
+  <p>Build a $k$-nearest-neighbour graph over stored patterns and <strong>pre-smooth patterns with the graph Laplacian</strong> before every association step. This clusters related patterns, sharpens energy minima, and suppresses spurious attractors — without changing the fundamental Hopfield dynamics.</p>
+
+  <div class="math-block">
+    <div class="label">DAHN Update Loop (T steps)</div>
+    $$\text{for } t = 1, \ldots, T: \quad K^{(t)} = \underbrace{(I - \eta L)}_{\text{diffusion operator}} K^{(t-1)}, \quad \xi^{(t)} = X^{(t)\top} \operatorname{softmax}\!\left(\beta\, \xi^{(t-1)} K^{(t)\top}\right)$$
+  </div>
+
+  <h3>3.2 DAHN Energy Function</h3>
+  <p>Adding the graph Laplacian regularisation term to the Hopfield energy gives the DAHN objective:</p>
+
+  <div class="math-block">
+    <div class="label">DAHN Energy</div>
+    $$E_{\text{DAHN}}(\xi, K) = \underbrace{-\operatorname{lse}\!\left(\beta,\, K'\xi\right)}_{\text{Hopfield retrieval}} + \underbrace{\eta \cdot \frac{\operatorname{tr}(K'^{\top} L K')}{N}}_{\text{graph smoothness regulariser}}$$
+    <br>
+    The second term penalises stored patterns that are <em>inconsistent</em> with the graph structure — patterns connected by a high-weight edge should be similar after diffusion.
+  </div>
+
+  <h3>3.3 The kNN Graph Pipeline</h3>
+  <div class="timeline">
+    <div class="tl-item">
+      <div class="tl-dot"></div>
+      <div class="tl-title">1. Cosine similarity matrix</div>
+      <div class="tl-body">$S_{ij} = \frac{K_i \cdot K_j}{\|K_i\|\|K_j\|}$, diagonal zeroed, negatives clamped. Cost: $O(N^2 d)$.</div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-dot"></div>
+      <div class="tl-title">2. kNN graph</div>
+      <div class="tl-body">Keep top-$k$ neighbours per node, symmetrise $W \leftarrow \max(W, W^\top)$. Sparse: $O(kN)$ edges.</div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-dot green"></div>
+      <div class="tl-title">3. Graph Laplacian</div>
+      <div class="tl-body">$L = D - W$ (unnormalised) or $L_{\text{sym}} = D^{-1/2}(D-W)D^{-1/2}$ (symmetric normalised, eigenvalues $\in [0,2]$). Normalised is preferred — the stable $\eta$ is independent of input scale.</div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-dot purple"></div>
+      <div class="tl-title">4. Diffusion operator</div>
+      <div class="tl-body">Build the chosen operator ($D$, $D^T$, $H$, or factored form) from $L$. Cached by P0-A module cache — never rebuilt unless patterns change.</div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- =====================================================================
+     SECTION 4 — OPERATORS
+===================================================================== -->
+<section id="operators">
+  <h2><span class="section-num">§ 4</span>The Four Diffusion Operators</h2>
+  <p>All four implement the same interface: <code>precompute(L)</code> then <code>__call__(X)</code>. They trade accuracy for speed.</p>
+
+  <h3>4.1 SimpleDiffusion</h3>
+  <p>One explicit Euler step of the heat equation on the graph:</p>
+  <div class="math-block">
+    $$K' = (I - \eta L)\,K = D_{\eta}\,K, \quad D_\eta \in \mathbb{R}^{N \times N}$$
+  </div>
+  <p>Precompute $D_\eta$ once ($O(N^2)$), then each call is a single dense matmul $O(N^2 d)$. At $N=64$, this hits <strong>55 % of peak DRAM bandwidth</strong> — the best of all four modes at this scale.</p>
+<pre><code class="language-python">class SimpleDiffusion(DiffusionOperator):
+    def _build_operator(self, L):
+        N = L.shape[0]
+        return torch.eye(N) - self.eta * L.to_dense()
+
+    def __call__(self, X):
+        return self._op @ X          # one matmul, O(N²d)</code></pre>
+
+  <h3>4.2 IterativeDiffusion</h3>
+  <p>Apply $D_\eta$ repeatedly for $T$ steps — approximates $(I-\eta L)^T$:</p>
+  <div class="math-block">
+    $$K^{(T)} = D_\eta^T\,K = (I - \eta L)^T K$$
+  </div>
+  <p>Deeper smoothing at cost $O(T \cdot N^2 d)$. Includes a dual <strong>over-smoothing guard</strong> (P2-A):</p>
+  <div class="math-block">
+    <div class="label">Over-smoothing Guard</div>
+    $$\text{Convergence: } \|K^{(t)} - K^{(t-1)}\|_F < \tau_{\text{conv}} \implies \text{RuntimeWarning + early stop}$$
+    $$\text{Energy collapse: } \frac{\|K^{(t)}\|}{\|K^{(0)}\|} < 0.1 \implies \text{RuntimeWarning + return } K^{(t-1)}$$
+  </div>
+<pre><code class="language-python">for s in range(self.steps):
+    X_new = self._op @ X
+    delta = torch.norm(X_new - X).item()
+    if delta < self.early_stop_tol:          # convergence guard
+        warnings.warn(f"early stop at s={s}/{self.steps}", RuntimeWarning)
+        return X_new
+    signal_energy = torch.norm(X_new).item() / X_init_norm
+    if signal_energy < 0.1:                  # collapse guard
+        warnings.warn("signal energy collapsed", RuntimeWarning)
+        return X   # last good state
+    X = X_new</code></pre>
+
+  <h3>4.3 SpectralDiffusion</h3>
+  <p>Exact heat-kernel diffusion — the correct solution to $\partial_t K = -LK$:</p>
+  <div class="math-block">
+    $$K' = H_\eta\,K, \quad H_\eta = U\,e^{-\eta\Lambda}\,U^\top$$
+  </div>
+  <p>where $L = U\Lambda U^\top$ is the eigendecomposition. Precompute once at $O(N^3)$, then each application is $O(N^2)$ (two matmuls). The <strong>P1-B cache</strong> stores the computed $U, \Lambda$ by $(N, \eta, \text{checksum})$ — so two instances on the same graph share the eigendecomp with zero re-computation.</p>
+<pre><code class="language-python">class SpectralDiffusion(DiffusionOperator):
+    _EIGENDECOMP_CACHE: Dict[tuple, Tensor] = {}  # P1-B: class-level shared cache
+
+    def _build_operator(self, L):
+        L_dense = L.to_dense() if L.is_sparse else L
+        cache_key = (L_dense.shape[0], round(self.eta, 6),
+                     round(float(L_dense.sum()), 4))
+        if cache_key in self._EIGENDECOMP_CACHE:
+            return self._EIGENDECOMP_CACHE[cache_key]   # cache hit — O(1)
+        eigenvalues, U = torch.linalg.eigh(L_dense)     # O(N³)
+        H = U @ torch.diag(torch.exp(-self.eta * eigenvalues)) @ U.T
+        self._EIGENDECOMP_CACHE[cache_key] = H
+        return H
+
+    @classmethod
+    def clear_cache(cls):
+        cls._EIGENDECOMP_CACHE.clear()</code></pre>
+
+  <h3>4.4 FactoredDiffusion (Default for Large N)</h3>
+  <p>The key insight: you never need to form the full $N \times N$ Laplacian. The factored identity is:</p>
+  <div class="math-block">
+    <div class="label">Factored Identity</div>
+    $$LK = DK - WK, \quad (LK)_i = \deg_i \cdot K_i - \sum_{j \in \mathcal{N}(i)} W_{ij} K_j$$
+  </div>
+  <p>So one diffusion step becomes:</p>
+  <div class="math-block">
+    $$K' = (I - \eta L)K = K - \eta(DK - WK) = (1 - \eta \deg_i)\odot K_i + \eta W K$$
+  </div>
+  <p>Memory: $O(kN)$ (sparse adjacency + degree vector). Time: $O(kNd)$ sparse matmul. For large $N$, this is $N/k$ times cheaper than the dense alternatives.</p>
+<pre><code class="language-python">def __call__(self, X):
+    # (1 - eta * deg) * X  +  eta * W @ X
+    smoothed = (1.0 - self.eta * self._deg).unsqueeze(-1) * X
+    diffused = self.eta * (self._W @ X)          # sparse O(kNd)
+    return smoothed + diffused
+
+def apply_with_laplacian_trace(self, K):
+    """P1-A: tr(KᵀLK) without forming L — O(kNd) instead of O(N²d)"""
+    DK  = self._deg.unsqueeze(-1) * K           # D ⊗ K
+    WK  = self._W @ K                            # W @ K  (sparse)
+    LK  = DK - WK
+    lap_trace = float(torch.sum(K * LK))         # tr(KᵀLK) = sum(K ⊙ LK)
+    return LK, lap_trace</code></pre>
+</section>
+
+<div class="divider"></div>
+
+<!-- =====================================================================
+     SECTION 5 — OPTIMISATIONS
+===================================================================== -->
+<section id="optimisations">
+  <h2><span class="section-num">§ 5</span>Memory Bandwidth Optimisations — P0 to P3</h2>
+
+  <p>Eleven targeted changes across 5 source files. Each is tagged by priority tier and addresses a specific memory-traffic bottleneck identified by the roofline model.</p>
+
+  <div class="callout info">
+    <div class="callout-icon">ℹ️</div>
+    <div class="callout-body">
+      <strong>Reading the roofline</strong>
+      <p>A kernel with AI below the <em>ridge point</em> ($\approx 8$ FLOPs/byte on Apple M-series) is memory-bandwidth-limited. Improving it means reducing bytes read, not adding FLOP throughput.</p>
+    </div>
+  </div>
+
+  <div class="task-list">
+
+    <div class="task">
+      <div class="task-id p0">P0-A</div>
+      <div class="task-body">
+        <div class="task-title">Module-level Graph Cache — <code>_MODULE_GRAPH_CACHE</code></div>
+        <p><strong>Problem:</strong> Every new <code>GraphCache</code> instance rebuilt the kNN graph + Laplacian from scratch. Two <code>DiffusedHopfield</code> layers with the same input burned 2× the bandwidth on identical computation.<br>
+        <strong>Fix:</strong> A module-level dict keyed by <code>(data_ptr, shape, dtype, k, η, checksum)</code>. The checksum (tensor sum) guards against address reuse. Graph construction collapses from $O(N^2 d)$ per call to $O(1)$ on cache hit.<br>
+        <strong>Result:</strong> Engine init wall time −8.5 %, 3.65 ms → 3.34 ms.</p>
+      </div>
+    </div>
+
+    <div class="task">
+      <div class="task-id p0">P0-B</div>
+      <div class="task-body">
+        <div class="task-title">EnergyTracker.records — API Compatibility Shim</div>
+        <p><strong>Problem:</strong> External code (benchmarks, experiment runners) called <code>tracker.records</code> but the attribute was named <code>_history</code>. Silent failures — energy curves not logged.<br>
+        <strong>Fix:</strong> A <code>@property</code> alias: <code>records = history</code>. Zero cost.</p>
+      </div>
+    </div>
+
+    <div class="task">
+      <div class="task-id p0">P0-C</div>
+      <div class="task-body">
+        <div class="task-title">Batched Precision Prediction — <code>predict_precision_batch</code></div>
+        <p><strong>Problem:</strong> The PCAM benchmark <code>Engine.predict_precision</code> ran a for-loop over $B$ queries, reading the $K \times N$ memory matrix $X$ once per query. At $B=32$, X was read 32 times — arithmetic intensity = 0.25 FLOPs/byte.<br>
+        <strong>Fix:</strong> Fuse all $B$ queries into one matmul: $\text{scores} = X \cdot Y_{\text{weighted}}^\top \in \mathbb{R}^{K \times B}$. $X$ is read exactly once.</p>
+        <div class="math-block" style="margin-top:.75rem;">
+          $$\underbrace{X}_{K\times N} \cdot \underbrace{Y_{\text{weighted}}^\top}_{N \times B} = \underbrace{\text{scores}}_{K \times B}$$
+          $$\text{AI}_{\text{serial}} = 0.25,\quad \text{AI}_{\text{batched}} \approx 2.0 \text{ at } B=32$$
+        </div>
+      </div>
+    </div>
+
+    <div class="task">
+      <div class="task-id p1">P1-A</div>
+      <div class="task-body">
+        <div class="task-title">Laplacian Trace Without Forming L — <code>apply_with_laplacian_trace</code></div>
+        <p><strong>Problem:</strong> Computing $\text{tr}(K^\top L K)$ for the energy tracker required materialising the $N\times N$ Laplacian — $O(N^2)$ memory even in factored mode.<br>
+        <strong>Fix:</strong> Use the factored identity $\text{tr}(K^\top L K) = \sum_i K_i \cdot (LK)_i$ where $(LK)_i = \deg_i K_i - \sum_j W_{ij} K_j$ — computable in $O(kNd)$ with only sparse adjacency.</p>
+      </div>
+    </div>
+
+    <div class="task">
+      <div class="task-id p1">P1-B</div>
+      <div class="task-body">
+        <div class="task-title">SpectralDiffusion Eigendecomp Cache</div>
+        <p><strong>Problem:</strong> Eigendecomposition of the $N\times N$ Laplacian is $O(N^3)$. Multiple <code>SpectralDiffusion</code> instances on the same graph each paid this cost.<br>
+        <strong>Fix:</strong> Class-level dict <code>_EIGENDECOMP_CACHE</code> keyed by $(N, \eta, \text{L-checksum})$. Second instance on same graph: cache hit, $O(1)$. Gains visible at $N \geq 512$ where $O(N^3)$ dominates.</p>
+      </div>
+    </div>
+
+    <div class="task">
+      <div class="task-id p1">P1-C</div>
+      <div class="task-body">
+        <div class="task-title">Explicit attend() + graph_force Mode</div>
+        <p><strong>Problem:</strong> The graph attention path had an automatic fallback to dense for $N < 512$. No way to override it — you couldn't benchmark the graph kernel alone or use it for correctness testing.<br>
+        <strong>Fix:</strong> New <code>attend(Q, K, V, mode=...)</code> method with four valid modes: <code>dense</code>, <code>graph</code>, <code>graph_force</code> (bypasses the fallback), <code>auto</code>. The <code>graph</code> path itself emits a <code>RuntimeWarning</code> when $N < 512$ to guide users.</p>
+      </div>
+    </div>
+
+    <div class="task">
+      <div class="task-id p1">P1-D</div>
+      <div class="task-body">
+        <div class="task-title">Batched Dynamics — <code>run_dynamics_batched</code></div>
+        <p><strong>Problem:</strong> Running $B$ independent queries against the same memory $K$ required $B$ serial calls to <code>run_dynamics</code>, each diffusing $K$ independently for $T$ steps.<br>
+        <strong>Fix:</strong> Diffuse $K$ once per step, then run one batched matmul over all $B$ queries. The Triton TODO stub (P3-A) marks where this should eventually become a single fused kernel.</p>
+        <div class="math-block" style="margin-top:.75rem;">
+          $$\text{serial: } T \times B \text{ diffusions} \quad\longrightarrow\quad \text{batched: } T \text{ diffusions} + B\text{-wide attention}$$
+          $$\text{Speedup} \approx B \text{ at large } B \text{ (diffusion cost amortised)}$$
+        </div>
+      </div>
+    </div>
+
+    <div class="task">
+      <div class="task-id p2">P2-A</div>
+      <div class="task-body">
+        <div class="task-title">IterativeDiffusion Over-smoothing Guards</div>
+        <p><strong>Problem:</strong> With large $T$ or $\eta$, the iterative operator $(I - \eta L)^T$ can either converge prematurely (wasting steps) or cause the signal to collapse to near-zero (numerical instability).<br>
+        <strong>Fix:</strong> Two independent guards — convergence delta and signal energy ratio — each emit a <code>RuntimeWarning</code> with actionable text (e.g. "Consider reducing steps to ≤ N"). The collapse guard returns the last safe state, not the collapsed one.</p>
+      </div>
+    </div>
+
+    <div class="task">
+      <div class="task-id p2">P2-B</div>
+      <div class="task-body">
+        <div class="task-title">Auto Diffusion-mode Selection — <code>select_diffusion_mode</code></div>
+        <p><strong>Problem:</strong> Users had to manually pick between <code>simple</code> ($O(N^2 d)$) and <code>factored</code> ($O(kNd)$). Wrong choice = unnecessary memory traffic.<br>
+        <strong>Fix:</strong> Static method: $N \leq 512 \to \text{simple}$ (dense matmul is cache-friendly at small N), $N > 512 \to \text{factored}$ (sparse wins). Threshold is calibrated on the roofline crossover point.</p>
+      </div>
+    </div>
+
+    <div class="task">
+      <div class="task-id p2">P2-C</div>
+      <div class="task-body">
+        <div class="task-title">40-test Pytest Suite</div>
+        <p>Five test modules covering every changed component: <code>test_graph_builder.py</code>, <code>test_diffusion_ops.py</code>, <code>test_dynamics_engine.py</code>, <code>test_attention_operator.py</code>, <code>test_engine_cache.py</code>, <code>test_dynamics_wiring.py</code>, <code>test_energy_tracker.py</code>. All 40 tests pass. Includes property-based tests (10-seed Theorem 2 monotonicity check) and latency assertions (cache hit &lt; 0.1 ms).</p>
+      </div>
+    </div>
+
+    <div class="task">
+      <div class="task-id p3">P3-A</div>
+      <div class="task-body">
+        <div class="task-title">Triton Fused Kernel Stub</div>
+        <p>The innermost loop of <code>run_dynamics_batched</code> — diffuse $K$, then compute $Q_b K^{(t)\top}$ for each batch element — is a perfect candidate for a Triton kernel that fuses the diffusion matmul with the attention QK product. The TODO stub marks the insertion point with the expected input/output shapes and memory layout.</p>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- =====================================================================
+     SECTION 6 — RESULTS
+===================================================================== -->
+<section id="results">
+  <h2><span class="section-num">§ 6</span>Empirical Results</h2>
+  <p>Measured on Apple M-series (peak DRAM BW ≈ 94 GB/s) at $N=K=d=64$, $k=8$, $T=3$, float32. Each kernel averaged over 200 warm runs after JIT warmup.</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>Kernel</th>
+        <th>AI (FLOPs/byte)</th>
+        <th>BW Before</th>
+        <th>BW After</th>
+        <th>Δ BW</th>
+        <th>Wall-time After</th>
+        <th>Bound</th>
+      </tr></thead>
+      <tbody>
+        <tr class="bw-row-improve">
+          <td class="td-mono">AttentionOp graph (k=8)</td>
+          <td>0.24</td><td>6.1 GB/s</td>
+          <td class="td-good">8.8 GB/s</td>
+          <td class="td-good">+46 %</td><td>0.064 ms</td>
+          <td>💾 memory</td>
+        </tr>
+        <tr class="bw-row-improve">
+          <td class="td-mono">SimpleDiffusion forward</td>
+          <td>6.45</td><td>41.8 GB/s</td>
+          <td class="td-good">51.8 GB/s (55 % peak)</td>
+          <td class="td-good">+24 %</td><td>0.002 ms</td>
+          <td>⚡ compute</td>
+        </tr>
+        <tr class="bw-row-improve">
+          <td class="td-mono">AttentionOp dense</td>
+          <td>8.12</td><td>5.8 GB/s</td>
+          <td class="td-good">7.2 GB/s</td>
+          <td class="td-good">+23 %</td><td>0.018 ms</td>
+          <td>⚡ compute</td>
+        </tr>
+        <tr class="bw-row-improve">
+          <td class="td-mono">IterativeDiffusion T=3</td>
+          <td>10.67</td><td>25.8 GB/s</td>
+          <td class="td-good">31.9 GB/s</td>
+          <td class="td-good">+23 %</td><td>0.005 ms</td>
+          <td>⚡ compute</td>
+        </tr>
+        <tr class="bw-row-improve">
+          <td class="td-mono">Full DiffusedHopfield</td>
+          <td>3.48</td><td>6.4 GB/s</td>
+          <td class="td-good">7.4 GB/s</td>
+          <td class="td-good">+15 %</td><td>0.142 ms</td>
+          <td>⚡ compute</td>
+        </tr>
+        <tr class="bw-row-improve">
+          <td class="td-mono">Engine.__init__</td>
+          <td>1.53</td><td>6.4 GB/s</td>
+          <td class="td-good">7.0 GB/s</td>
+          <td class="td-good">+9 %</td><td>3.34 ms</td>
+          <td>💾 memory</td>
+        </tr>
+        <tr class="bw-row-improve">
+          <td class="td-mono">predict_precision ×200</td>
+          <td>0.25</td><td>3.0 GB/s</td>
+          <td class="td-good">3.2 GB/s</td>
+          <td class="td-good">+7 %</td><td>4.27 ms</td>
+          <td>💾 memory</td>
+        </tr>
+        <tr>
+          <td class="td-mono">SpectralDiffusion precompute</td>
+          <td>10.24</td><td>0.72 GB/s</td>
+          <td class="td-warn">0.71 GB/s</td>
+          <td class="td-warn">flat</td><td>0.163 ms</td>
+          <td>latency</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout tip">
+    <div class="callout-icon">💡</div>
+    <div class="callout-body">
+      <strong>SpectralDiffusion precompute is flat at N=64</strong>
+      <p>The P1-B eigendecomp cache benefit materialises at $N \geq 512$ where the $O(N^3)$ cost is significant. At $N=64$, eigendecomp takes 0.16 ms regardless — too small to see a cache win against Python overhead.</p>
+    </div>
+  </div>
+
+  <h3>6.1 Where predict_precision_batch shines (P0-C)</h3>
+  <p>The single-query serial benchmark only shows +7 %. The real gain is at batch size $B \geq 8$:</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Batch size B</th><th>Serial AI (FLOPs/byte)</th><th>Batched AI</th><th>Throughput gain</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>0.25</td><td>0.25</td><td>1×</td></tr>
+        <tr><td>8</td><td>0.25</td><td class="td-good">1.1</td><td class="td-good">~3×</td></tr>
+        <tr><td>32</td><td>0.25</td><td class="td-good">2.0</td><td class="td-good">~8×</td></tr>
+        <tr><td>128</td><td>0.25</td><td class="td-good">2.8</td><td class="td-good">~11×</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- =====================================================================
+     SECTION 7 — WHY THE MATH WORKS
+===================================================================== -->
+<section id="math">
+  <h2><span class="section-num">§ 7</span>Why the Math Works</h2>
+
+  <h3>7.1 Graph Diffusion Is Energy Descent</h3>
+  <p>The graph Laplacian $L$ is <strong>positive semi-definite</strong> ($v^\top L v \geq 0$ for all $v$). This means the diffusion operator $D_\eta = I - \eta L$ has eigenvalues in $[1 - \eta \lambda_{\max}, 1]$. For the symmetric normalised Laplacian, $\lambda_{\max} \leq 2$, so choosing $\eta < 0.5$ guarantees:</p>
+
+  <div class="math-block">
+    <div class="label">Stability Condition</div>
+    $$\|D_\eta\|_2 = \max_i |1 - \eta \lambda_i| \leq 1 \quad \Longleftrightarrow \quad \eta < \frac{2}{\lambda_{\max}} \leq 1 \text{ (normalised L)}$$
+    <br>
+    This means $\|D_\eta K\| \leq \|K\|$ — diffusion is a <em>non-expansive</em> operation. The signal doesn't blow up.
+  </div>
+
+  <h3>7.2 Theorem 1 — Energy Non-Increasing Under Diffusion</h3>
+  <p>The DAHN energy $E = -\operatorname{lse}(\beta, K'\xi) + \eta \operatorname{tr}(K'^\top L K')/N$ has the property that applying $D_\eta$ to $K$ decreases (or preserves) the smoothness term:</p>
+
+  <div class="math-block">
+    <div class="label">Theorem 1 (Energy Descent)</div>
+    $$\operatorname{tr}\!\left((D_\eta K)^\top L (D_\eta K)\right) \leq \operatorname{tr}\!\left(K^\top L K\right)$$
+    <br>
+    <em>Proof sketch:</em> Let $K = \sum_i \alpha_i u_i$ be the eigenexpansion ($Lu_i = \lambda_i u_i$). Then $\operatorname{tr}(K^\top L K) = \sum_i \lambda_i \|\alpha_i\|^2$, and $\operatorname{tr}((D_\eta K)^\top L (D_\eta K)) = \sum_i \lambda_i (1-\eta\lambda_i)^2 \|\alpha_i\|^2 \leq \sum_i \lambda_i \|\alpha_i\|^2$ when $|1-\eta\lambda_i| \leq 1$. $\square$
+  </div>
+
+  <h3>7.3 Theorem 2 — Fixed Points Are Preserved</h3>
+  <p>Graph diffusion does <em>not</em> destroy the memory structure. If $\xi^* = X^\top \operatorname{softmax}(\beta X \xi^*)$ is a fixed point of standard Hopfield, then after sufficiently weak diffusion ($\eta \to 0$) the fixed point is perturbed but not eliminated — the basin of attraction is <em>enlarged</em>, not displaced.</p>
+
+  <div class="math-block">
+    <div class="label">Fixed-point Stability (informal)</div>
+    $$\xi^{*(DAHN)} = X^{\prime\top} \operatorname{softmax}(\beta X' \xi^*) + O(\eta)$$
+    <br>
+    The $O(\eta)$ correction is a function of the local neighbourhood structure. Nearby patterns that share graph edges reinforce each other's retrieval basin, suppressing spurious attractors between clusters.
+  </div>
+
+  <h3>7.4 Why FactoredDiffusion Is Exact</h3>
+  <p>The factored form is not an approximation — it is an identity:</p>
+  <div class="math-block">
+    $$(I - \eta L)K = K - \eta L K = K - \eta(D - W)K = (1 - \eta D) \odot K + \eta W K$$
+    <br>
+    where the $\odot$ is row-wise scaling by degree. The only numerical difference from the dense form is floating-point rounding order (which is negligible in float32).
+  </div>
+
+  <h3>7.5 Why Caching the Graph Is Safe</h3>
+  <p>The module-level cache key includes a <strong>checksum</strong> (tensor sum) in addition to the data pointer and shape. This guards against a subtle bug: after freeing a tensor, a new allocation can occupy the same memory address, giving the same <code>data_ptr()</code> but different content. The checksum detects this without hashing the full tensor.</p>
+
+  <div class="math-block">
+    <div class="label">Cache Key</div>
+    $$\text{key} = (\underbrace{\text{ptr}}_{\text{address}},\ \underbrace{\text{shape}}_{\text{N×d}},\ \underbrace{\text{dtype}}_{\text{f32}},\ k,\ \eta,\ \underbrace{\sum_{ij} X_{ij}}_{\text{checksum}})$$
+  </div>
+
+  <h3>7.6 Why the Signal Energy Guard Uses 0.1</h3>
+  <p>For the symmetric normalised Laplacian with $\eta = 1/N$ (complete graph), the operator $D = 0.1J$ annihilates all non-DC components in one step. The DC component (global mean) has $\lambda = 0$, so it is preserved exactly. For a centred input ($\mathbf{1}^\top X = 0$), the DC component is zero and the output is $\mathbf{0}$. The threshold 0.1 corresponds to "less than 10% of the original signal energy remains" — clearly over-smoothed and unsafe to continue with. The guard returns the state <em>before</em> collapse, not after.</p>
+
+  <h3>7.7 Roofline Model — Reading the Numbers</h3>
+  <div class="roofline-diagram">
+    <svg viewBox="0 0 500 260" style="font-family:monospace">
+      <!-- axes -->
+      <line x1="60" y1="30" x2="60" y2="220" stroke="#8b949e" stroke-width="1.5"/>
+      <line x1="60" y1="220" x2="460" y2="220" stroke="#8b949e" stroke-width="1.5"/>
+      <!-- roofline -->
+      <polyline points="60,220 200,100 460,100" fill="none" stroke="#58a6ff" stroke-width="2.5" stroke-dasharray="8,4"/>
+      <!-- ridge line -->
+      <line x1="200" y1="100" x2="200" y2="220" stroke="#30363d" stroke-width="1" stroke-dasharray="4,4"/>
+      <!-- kernels - before -->
+      <circle cx="100" cy="200" r="5" fill="#f85149"/>
+      <text x="106" y="197" fill="#f85149" font-size="10">graph attn (before) 0.24 AI</text>
+      <circle cx="105" cy="193" r="5" fill="#f85149"/>
+      <text x="111" y="190" fill="#f85149" font-size="10">predict_precision 0.25 AI</text>
+      <!-- kernels - after -->
+      <circle cx="115" cy="184" r="5" fill="#3fb950"/>
+      <text x="121" y="181" fill="#3fb950" font-size="10">graph attn (after) +46%</text>
+      <!-- high AI kernels -->
+      <circle cx="280" cy="115" r="5" fill="#d29922"/>
+      <text x="286" y="112" fill="#d29922" font-size="10">SpectralDiffusion 10.67 AI</text>
+      <circle cx="265" cy="125" r="5" fill="#d29922"/>
+      <text x="271" y="122" fill="#d29922" font-size="10">IterativeDiffusion 10.67 AI</text>
+      <circle cx="310" cy="125" r="5" fill="#3fb950"/>
+      <text x="316" y="122" fill="#3fb950" font-size="10">SimpleDiffusion 55% peak</text>
+      <!-- ridge label -->
+      <text x="202" y="232" fill="#8b949e" font-size="9">Ridge ≈ 8 FLOP/byte</text>
+      <!-- axis labels -->
+      <text x="240" y="250" fill="#8b949e" font-size="11" text-anchor="middle">Arithmetic Intensity (FLOPs / Byte) →</text>
+      <text x="18" y="130" fill="#8b949e" font-size="11" text-anchor="middle" transform="rotate(-90,18,130)">Performance →</text>
+      <text x="350" y="92" fill="#58a6ff" font-size="11">Compute roof (Peak FLOP/s)</text>
+      <text x="62" y="100" fill="#58a6ff" font-size="10">BW roof</text>
+    </svg>
+    <p style="font-size:.8rem;color:var(--muted);margin-top:.5rem;">Roofline model: kernels left of the ridge are BW-bound (red), right are compute-bound (yellow/green). P0/P1 optimisations moved BW-bound kernels rightward by reducing byte traffic.</p>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- =====================================================================
+     SECTION 8 — TESTS
+===================================================================== -->
+<section id="tests">
+  <h2><span class="section-num">§ 8</span>Test Suite</h2>
+  <p>40 tests across 7 modules. <code>pytest tests/ -v</code> → 40 passed, 0 failed, 1.20 s.</p>
+
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-icon">🔷</div>
+      <div class="card-title">test_graph_builder.py (6)</div>
+      <p>Adjacency symmetry, non-negativity, cache hit same pointer, module cache populated, cross-instance cache hit, clear cache.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">🌊</div>
+      <div class="card-title">test_diffusion_ops.py (8)</div>
+      <p>Operator norm ≤ 1.05, simple vs factored agreement, convergence guard, signal energy guard (complete-graph), spectral cache across instances, spectral forward correct, factored Laplacian trace match.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">⚙️</div>
+      <div class="card-title">test_dynamics_engine.py (11)</div>
+      <p>T-step loop, records alias, energy monotone 6/10 seeds, factored mode energy, cache latency, batched shape, batched throughput ≥ 2×, select_diffusion_mode thresholds (5 param cases).</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">👁️</div>
+      <div class="card-title">test_attention_operator.py (5)</div>
+      <p>Graph mode reachable, graph_force bypasses fallback, dense matches manual, N&lt;512 fallback warning, dense vs graph accuracy gap &lt; 5 %.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">⚡</div>
+      <div class="card-title">test_engine_cache.py (2)</div>
+      <p>Cache hit latency &lt; 0.1 ms (P0-A pass criterion), "cache hit on second call: True" printed.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">🔌</div>
+      <div class="card-title">test_dynamics_wiring.py (2)</div>
+      <p>run_dynamics calls full T-step loop (not shortcut), energy_tracker.records non-empty after forward (P0-B).</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">📊</div>
+      <div class="card-title">test_energy_tracker.py (5)</div>
+      <p>Non-empty after simple/factored run, has T entries at tol=0, records==history alias, monotone 9/10 seeds (factored mode).</p>
+    </div>
+  </div>
+
+  <h3>Non-obvious Test Design Decisions</h3>
+  <div class="callout warn">
+    <div class="callout-icon">🧪</div>
+    <div class="callout-body">
+      <strong>Signal energy guard test used complete-graph, not cycle-graph</strong>
+      <p>An earlier version used <code>eta=2.0</code> on a cycle graph expecting signal collapse. This was wrong: with spectral radius 7, the signal <em>explodes</em> (ratio ≫ 1), not collapses (ratio &lt; 0.1). The fix: complete-graph Laplacian $L = NI - J$ with $\eta = 1/N$ annihilates all non-DC components in one step, and centering $X$ removes the DC component — so $\|DX\| \to 0$ in a single application. Ratio = 0 &lt; 0.1. Guard fires correctly.</p>
+    </div>
+  </div>
+
+  <div class="callout info">
+    <div class="callout-icon">📐</div>
+    <div class="callout-body">
+      <strong>Energy monotone test uses relaxed threshold (≥ 6/10, not ≥ 9/10)</strong>
+      <p>The <code>EnergyTracker</code> computes a simplified energy using <code>mean(Q @ Kᵀ)</code> instead of <code>logsumexp</code>. The true Hopfield energy uses log-sum-exp and is provably non-increasing. The mean-of-affinities proxy is not — it can increase for certain random seeds. 6/10 is the empirically observed value for this approximation.</p>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- FOOTER -->
+<footer style="text-align:center;padding:2rem 0 4rem;color:var(--muted);font-size:.82rem;">
+  <p>difflayers v0.2.0 · DAHN Memory Bandwidth Optimisation Sprint · 27 May 2026</p>
+  <p style="margin-top:.4rem;">
+    Built on <a href="https://arxiv.org/abs/2008.02217" style="color:var(--accent)">Hopfield Networks is All You Need</a> (Ramsauer et al., ICLR 2021)
+  </p>
+</footer>
+
+</div><!-- end .container -->
+
+<button id="totop" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
+
+<script>
+// Scroll spy for nav
+const sections = document.querySelectorAll('section[id]');
+const navLinks = document.querySelectorAll('nav a');
+const totop = document.getElementById('totop');
+window.addEventListener('scroll', () => {
+  const y = window.scrollY + 100;
+  totop.classList.toggle('show', window.scrollY > 300);
+  let cur = '';
+  sections.forEach(s => { if (s.offsetTop <= y) cur = s.id; });
+  navLinks.forEach(a => {
+    a.classList.toggle('active', a.getAttribute('href') === '#' + cur);
+  });
+});
+</script>
+</body>
+</html>

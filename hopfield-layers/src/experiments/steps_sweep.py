@@ -101,9 +101,10 @@ def run_steps_sweep(
         modes = ["simple", "iterative", "spectral"]
 
     device = torch.device("cpu")
-    patterns = generate_clustered_patterns(
+    patterns, _cluster_labels = generate_clustered_patterns(
         N, d, n_clusters=n_clusters, seed=seed
-    ).to(device)
+    )
+    patterns = patterns.to(device)
 
     rng = torch.Generator()
     rng.manual_seed(seed + 20)

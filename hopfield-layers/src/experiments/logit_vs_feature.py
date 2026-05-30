@@ -147,9 +147,10 @@ def run_logit_vs_feature(
         noise_levels = [0.0, 0.1, 0.2, 0.3, 0.35, 0.4, 0.5]
 
     device = torch.device("cpu")
-    patterns = generate_clustered_patterns(
+    patterns, _cluster_labels = generate_clustered_patterns(
         N, d, n_clusters=n_clusters, seed=seed
-    ).to(device)
+    )
+    patterns = patterns.to(device)
 
     # Build Laplacian for logit-level diffusion
     S_mat = build_similarity_matrix(patterns)

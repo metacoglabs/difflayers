@@ -116,17 +116,17 @@ def run_noise_robustness(
     N: int = 200,
     d: int = 64,
     beta: float = 12.0,
-    eta: float = 0.05,
-    k: int = 3,
+    eta: float = 0.10,      # was 0.05 — too weak for query diffusion
+    k: int = 10,            # was 3 — too sparse; rule: k >= N/n_clusters = 10
     M: int = 500,
     noise_levels: list = None,
-    diffusion_mode: str = "factored",
-    diffusion_steps: int = 1,
+    diffusion_mode: str = "simple",   # simple > factored at N<=512
+    diffusion_steps: int = 3,         # was 1
     n_clusters: int = 20,
     seed: int = 42,
     results_dir: str = "results",
     use_real_data: bool = False,
-    diffuse_query: bool = False,
+    diffuse_query: bool = True,       # was False — query diffusion is correct direction
 ) -> pd.DataFrame:
     """
     Run the noise-robustness experiment and return a results DataFrame.
@@ -164,8 +164,8 @@ def run_noise_robustness(
         print(f"Loading MNIST-PCA (N_per_class={n_per_class}, d={d}) …")
         patterns, _labels = load_mnist_pca(N_per_class=n_per_class, d=d, seed=seed)
     else:
-        patterns = generate_clustered_patterns(
-            N, d, n_clusters=n_clusters, seed=seed
+        patterns, _cluster_labels = generate_clustered_patterns(
+            N, d, n_clusters=n_clusters, seed=seed, return_labels=True
         )
     patterns = patterns.to(device)   # (N, d)
 

@@ -78,35 +78,15 @@ def test_energy_records_alias():
 
 
 def test_energy_monotone_factored_multiple_seeds():
-    """E(t) non-increasing on ≥ 90% of 10 seeds in factored mode (Theorem 2).
-
-    Uses V=K (values equal stored keys) which is required for the Hopfield
-    fixed-point theorem and logsumexp energy monotonicity guarantee.
-    """
+    """E(t) non-increasing on ≥ 90% of 10 seeds in factored mode (Theorem 2)."""
     N, d, T = 12, 8, 5
     monotone = 0
     for seed in range(10):
         torch.manual_seed(seed)
-        cfg   = DiffusionConfig(k_neighbors=4, eta=0.1, diffusion_mode="factored",
-                                steps=T, cache_graph=True)
-        cache = GraphCache(cfg)
-        X     = torch.randn(N, d)
-        W, deg, adj, L, op = cache.get(X)
-        tracker = EnergyTracker(beta=1.0, eta=0.1, tol=0.0)
-        engine  = DynamicsEngine(
-            diffusion_op=op,
-            attention_op=AttentionOperator(beta=1.0, mode="dense"),
-            steps=T,
-            energy_tracker=tracker,
-        )
-        Q = torch.randn(N, d)
-        K = X.clone()
-        V = K.clone()   # V = K  — required for fixed-point theorem
-        engine.run_dynamics(Q, K, V, adj_indices=adj, L=L, W=W, deg=deg,
-                            diffuse_query=False, diffuse_key=True)
+        tracker = _run_engine(N=N, d=d, T=T, mode="factored")
         E = tracker.history
         if all(E[i] >= E[i + 1] - 0.05 for i in range(len(E) - 1)):
             monotone += 1
     assert monotone >= 9, (
-        f"Energy monotone on {monotone}/10 seeds (factored, V=K); expected ≥ 9"
+        f"Energy monotone on {monotone}/10 seeds (factored); expected ≥ 9"
     )

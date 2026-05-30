@@ -94,9 +94,10 @@ def run_mode_comparison(
 
     modes = ["baseline", "simple", "iterative", "spectral"]
     device = torch.device("cpu")
-    patterns = generate_clustered_patterns(
-        N, d, n_clusters=n_clusters, seed=seed
-    ).to(device)
+    patterns, cluster_labels = generate_clustered_patterns(
+        N, d, n_clusters=n_clusters, seed=seed, return_labels=True
+    )
+    patterns = patterns.to(device)
 
     models = {m: _build_model(m, beta, eta, k, steps, device) for m in modes}
 
